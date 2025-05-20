@@ -109,18 +109,57 @@ class Player:
 
 @dataclass
 class FixtureStatus:
-    """Fixture status information."""
+    """
+    Fixture status information.
+    
+    Attributes:
+        long: Long form status description (e.g. "In Play")
+        short: Short form status code (e.g. "1H" for first half)
+        elapsed: Minutes elapsed in the match
+    """
     long: str
     short: str
     elapsed: Optional[int] = None
+    
+    @property
+    def is_live(self) -> bool:
+        """Check if the match is currently live."""
+        live_statuses = ["1H", "2H", "HT", "ET", "BT", "P", "LIVE"]
+        return self.short in live_statuses
+
+@dataclass
+class FixtureScore:
+    """
+    Score information for a fixture.
+    
+    Attributes:
+        halftime: Score at halftime (home-away)
+        fulltime: Score at fulltime (home-away)
+        extratime: Score in extra time (home-away)
+        penalty: Score in penalties (home-away)
+    """
+    halftime: Optional[Dict[str, int]] = None
+    fulltime: Optional[Dict[str, int]] = None
+    extratime: Optional[Dict[str, int]] = None
+    penalty: Optional[Dict[str, int]] = None
 
 @dataclass
 class FixtureTeam:
-    """Team information for a fixture."""
+    """
+    Team information for a fixture.
+    
+    Attributes:
+        id: Team ID
+        name: Team name
+        logo: URL to the team logo
+        goals: Number of goals scored
+        winner: True if this team is the winner
+    """
     id: int
     name: str
     logo: str
     goals: Optional[int] = None
+    winner: Optional[bool] = None
 
 @dataclass
 class Fixture:
@@ -134,6 +173,9 @@ class Fixture:
         home_team: Home team information
         away_team: Away team information
         league: League information
+        score: Detailed score information
+        referee: Name of the referee
+        venue: Venue information
     """
     id: int
     date: datetime
@@ -141,6 +183,21 @@ class Fixture:
     home_team: FixtureTeam
     away_team: FixtureTeam
     league: League
+    score: Optional[FixtureScore] = None
+    referee: Optional[str] = None
+    venue: Optional[str] = None
+    
+    @property
+    def is_live(self) -> bool:
+        """Check if the match is currently live."""
+        return self.status.is_live
+    
+    @property
+    def score_display(self) -> str:
+        """Get a display-friendly score string."""
+        home_goals = self.home_team.goals if self.home_team.goals is not None else 0
+        away_goals = self.away_team.goals if self.away_team.goals is not None else 0
+        return f"{home_goals}-{away_goals}"
     
     @classmethod
     def from_api(cls, data: Dict[str, Any]) -> 'Fixture':
@@ -148,50 +205,64 @@ class Fixture:
         fixture_data = data.get("fixture", {})
         teams_data = data.get("teams", {})
         goals_data = data.get("goals", {})
+        score_data = data.get("score", {})
         status_data = fixture_data.get("status", {})
         
         # Create FixtureStatus
         status = FixtureStatus(
-            long=status_data.get("long"),
-            short=status_data.get("short"),
+            long=status_data.get("long", ""),
+            short=status_data.get("short", ""),
             elapsed=status_data.get("elapsed")
         )
         
         # Create FixtureTeams
         home_team = FixtureTeam(
-            id=teams_data.get("home", {}).get("id"),
-            name=teams_data.get("home", {}).get("name"),
-            logo=teams_data.get("home", {}).get("logo"),
-            goals=goals_data.get("home")
+            id=teams_data.get("home", {}).get("id", 0),
+            name=teams_data.get("home", {}).get("name", ""),
+            logo=teams_data.get("home", {}).get("logo", ""),
+            goals=goals_data.get("home"),
+            winner=teams_data.get("home", {}).get("winner")
         )
         
         away_team = FixtureTeam(
-            id=teams_data.get("away", {}).get("id"),
-            name=teams_data.get("away", {}).get("name"),
-            logo=teams_data.get("away", {}).get("logo"),
-            goals=goals_data.get("away")
+            id=teams_data.get("away", {}).get("id", 0),
+            name=teams_data.get("away", {}).get("name", ""),
+            logo=teams_data.get("away", {}).get("logo", ""),
+            goals=goals_data.get("away"),
+            winner=teams_data.get("away", {}).get("winner")
+        )
+        
+        # Create FixtureScore
+        score = FixtureScore(
+            halftime=score_data.get("halftime"),
+            fulltime=score_data.get("fulltime"),
+            extratime=score_data.get("extratime"),
+            penalty=score_data.get("penalty")
         )
         
         # Parse date
         date_str = fixture_data.get("date")
-        date = datetime.fromisoformat(date_str) if date_str else datetime.now()
+        date = datetime.fromisoformat(date_str.replace("Z", "+00:00")) if date_str else datetime.now()
         
         # Create League
         league = League(
-            id=data.get("league", {}).get("id"),
-            name=data.get("league", {}).get("name"),
-            country=data.get("league", {}).get("country"),
-            logo=data.get("league", {}).get("logo"),
+            id=data.get("league", {}).get("id", 0),
+            name=data.get("league", {}).get("name", ""),
+            country=data.get("league", {}).get("country", ""),
+            logo=data.get("league", {}).get("logo", ""),
             season=data.get("league", {}).get("season")
         )
         
         return cls(
-            id=fixture_data.get("id"),
+            id=fixture_data.get("id", 0),
             date=date,
             status=status,
             home_team=home_team,
             away_team=away_team,
-            league=league
+            league=league,
+            score=score,
+            referee=fixture_data.get("referee"),
+            venue=fixture_data.get("venue", {}).get("name")
         )
 
 @dataclass
@@ -220,29 +291,34 @@ class TeamStanding:
     goals_for: int
     goals_against: int
     
+    @property
+    def goal_difference(self) -> int:
+        """Get the goal difference."""
+        return self.goals_for - self.goals_against
+    
     @classmethod
     def from_api(cls, data: Dict[str, Any]) -> 'TeamStanding':
         """Create a TeamStanding object from API data."""
         team_data = data.get("team", {})
         
         team = Team(
-            id=team_data.get("id"),
-            name=team_data.get("name"),
+            id=team_data.get("id", 0),
+            name=team_data.get("name", ""),
             country="",  # Not provided in standings
-            logo=team_data.get("logo")
+            logo=team_data.get("logo", "")
         )
         
         all_data = data.get("all", {})
         goals_data = all_data.get("goals", {})
         
         return cls(
-            rank=data.get("rank"),
+            rank=data.get("rank", 0),
             team=team,
-            points=data.get("points"),
-            played=all_data.get("played"),
-            win=all_data.get("win"),
-            draw=all_data.get("draw"),
-            lose=all_data.get("lose"),
-            goals_for=goals_data.get("for"),
-            goals_against=goals_data.get("against")
+            points=data.get("points", 0),
+            played=all_data.get("played", 0),
+            win=all_data.get("win", 0),
+            draw=all_data.get("draw", 0),
+            lose=all_data.get("lose", 0),
+            goals_for=goals_data.get("for", 0),
+            goals_against=goals_data.get("against", 0)
         )

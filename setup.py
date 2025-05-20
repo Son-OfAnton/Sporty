@@ -1,36 +1,27 @@
 from setuptools import setup, find_packages
 
+
+with open("requirements.txt") as f:
+    requirements = f.read().splitlines()
+
 setup(
     name="sporty",
     version="0.1.0",
     packages=find_packages(),
     include_package_data=True,
-    install_requires=[
-        "click>=8.0.0",
-        "colorama>=0.4.4",
-        "tabulate>=0.8.9",
-    ],
-    extras_require={
-        "dev": [
-            "pytest>=6.2.5",
-            "pytest-cov>=2.12.1",
-            "black>=21.5b2",
-            "isort>=5.9.1",
-            "flake8>=3.9.2",
-        ],
-    },
+    install_requires=requirements,
     entry_points={
         "console_scripts": [
             "sporty=app.cli:main",
         ],
     },
     python_requires=">=3.7",
-    author="Your Name",
-    author_email="your.email@example.com",
+    author="Admas Terefe Girma",
+    author_email="admasterefe00@example.com",
     description="A command-line application for sports management and statistics",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/sporty",
+    url="https://github.com/Son-OfAnton/sporty",
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: End Users/Desktop",
