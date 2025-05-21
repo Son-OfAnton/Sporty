@@ -12,7 +12,7 @@ setup(
     install_requires=requirements,
     entry_points={
         "console_scripts": [
-            "sporty=app.cli:main",
+            "sporty=app.cli.cli:main",
         ],
     },
     python_requires=">=3.7",
