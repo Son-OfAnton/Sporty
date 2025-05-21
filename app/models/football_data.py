@@ -322,3 +322,187 @@ class TeamStanding:
             goals_for=goals_data.get("for", 0),
             goals_against=goals_data.get("against", 0)
         )
+@dataclass
+class FixtureEvent:
+    """
+    Represents an event that occurred during a match.
+    
+    Attributes:
+        time: Time when the event occurred (in minutes)
+        team_id: ID of the team this event belongs to
+        team_name: Name of the team this event belongs to
+        player_id: ID of the player involved
+        player_name: Name of the player involved
+        type: Type of event (Goal, Card, etc.)
+        detail: Detailed type (Yellow Card, Red Card, Normal Goal, etc.)
+        comments: Additional comments about the event
+        assist_player_id: ID of the player who provided the assist (for goals)
+        assist_player_name: Name of the player who provided the assist (for goals)
+    """
+    time: int
+    team_id: int
+    team_name: str
+    player_id: Optional[int]
+    player_name: str
+    type: str
+    detail: str
+    comments: Optional[str] = None
+    assist_player_id: Optional[int] = None
+    assist_player_name: Optional[str] = None
+    
+    @classmethod
+    def from_api(cls, data: Dict[str, Any]) -> 'FixtureEvent':
+        """Create a FixtureEvent object from API data."""
+        time_data = data.get("time", {})
+        team_data = data.get("team", {})
+        player_data = data.get("player", {})
+        assist_data = data.get("assist", {})
+        
+        return cls(
+            time=time_data.get("elapsed", 0),
+            team_id=team_data.get("id", 0),
+            team_name=team_data.get("name", ""),
+            player_id=player_data.get("id"),
+            player_name=player_data.get("name", ""),
+            type=data.get("type", ""),
+            detail=data.get("detail", ""),
+            comments=data.get("comments"),
+            assist_player_id=assist_data.get("id"),
+            assist_player_name=assist_data.get("name")
+        )
+
+@dataclass
+class TeamStatistic:
+    """
+    Represents a single statistic for a team.
+    
+    Attributes:
+        type: Type of statistic
+        value: Value of the statistic
+    """
+    type: str
+    value: Any
+    
+@dataclass
+class FixtureStatistics:
+    """
+    Represents statistics for a team in a fixture.
+    
+    Attributes:
+        team_id: ID of the team
+        team_name: Name of the team
+        statistics: List of statistics
+    """
+    team_id: int
+    team_name: str
+    statistics: List[TeamStatistic]
+    
+    @classmethod
+    def from_api(cls, data: Dict[str, Any]) -> 'FixtureStatistics':
+        """Create a FixtureStatistics object from API data."""
+        team_data = data.get("team", {})
+        statistics_data = data.get("statistics", [])
+        
+        statistics = []
+        for stat in statistics_data:
+            if stat.get("type") and stat.get("value") is not None:
+                statistics.append(TeamStatistic(
+                    type=stat.get("type"),
+                    value=stat.get("value")
+                ))
+        
+        return cls(
+            team_id=team_data.get("id", 0),
+            team_name=team_data.get("name", ""),
+            statistics=statistics
+        )
+
+@dataclass
+class Player:
+    """
+    Represents a player.
+    
+    Attributes:
+        id: Player ID
+        name: Player name
+        number: Shirt number
+        position: Position
+        grid: Position on field grid (if available)
+    """
+    id: int
+    name: str
+    number: Optional[int] = None
+    position: Optional[str] = None
+    grid: Optional[str] = None
+
+@dataclass
+class TeamLineup:
+    """
+    Represents a team's lineup for a fixture.
+    
+    Attributes:
+        team_id: Team ID
+        team_name: Team name
+        formation: Team formation (e.g., "4-3-3")
+        starters: List of starting players
+        substitutes: List of substitute players
+        coach: Name of the coach
+    """
+    team_id: int
+    team_name: str
+    formation: str
+    starters: List[Player]
+    substitutes: List[Player]
+    coach: str
+    
+    @classmethod
+    def from_api(cls, data: Dict[str, Any]) -> 'TeamLineup':
+        """Create a TeamLineup object from API data."""
+        team_data = data.get("team", {})
+        coach_data = data.get("coach", {})
+        starters_data = data.get("startXI", [])
+        subs_data = data.get("substitutes", [])
+        
+        starters = []
+        for player_data in starters_data:
+            player_info = player_data.get("player", {})
+            starters.append(Player(
+                id=player_info.get("id", 0),
+                name=player_info.get("name", ""),
+                number=player_info.get("number"),
+                position=player_info.get("position"),
+                grid=player_info.get("grid")
+            ))
+            
+        substitutes = []
+        for player_data in subs_data:
+            player_info = player_data.get("player", {})
+            substitutes.append(Player(
+                id=player_info.get("id", 0),
+                name=player_info.get("name", ""),
+                number=player_info.get("number"),
+                position=player_info.get("position")
+            ))
+        
+        return cls(
+            team_id=team_data.get("id", 0),
+            team_name=team_data.get("name", ""),
+            formation=data.get("formation", ""),
+            starters=starters,
+            substitutes=substitutes,
+            coach=coach_data.get("name", "")
+        )
+
+@dataclass
+class MatchStatistics:
+    """
+    Container for all statistics for a fixture.
+    
+    Attributes:
+        events: List of match events
+        team_statistics: Dictionary of team statistics, keyed by team ID
+        lineups: Dictionary of team lineups, keyed by team ID
+    """
+    events: List[FixtureEvent]
+    team_statistics: Dict[int, FixtureStatistics]
+    lineups: Dict[int, TeamLineup]

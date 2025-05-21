@@ -10,7 +10,7 @@ from app.api.client import FootballAPIClient
 from app.utils.api_utils import parse_response
 from app.utils.error_handlers import handle_api_error, APIError
 from app.models.football_data import (
-    League, Team, Player, Fixture, TeamStanding
+    FixtureEvent, FixtureStatistics, League, MatchStatistics, Team, Player, Fixture, TeamLineup, TeamStanding
 )
 
 logger = logging.getLogger(__name__)
@@ -372,3 +372,104 @@ class FootballService:
                     f"Error getting matches for league {league.id}: {e}")
 
         return result
+
+    def get_fixture_events(
+        self,
+        fixture_id: int
+    ) -> List[FixtureEvent]:
+        """
+        Get event details (goals, cards, substitutions) for a specific fixture.
+        
+        Args:
+            fixture_id: ID of the fixture
+            
+        Returns:
+            List of FixtureEvent objects
+        """
+        response = self.client.get_fixture_events(fixture_id=fixture_id)
+        events_data = parse_response(response, error_handler=handle_api_error)
+        
+        return [FixtureEvent.from_api(item) for item in events_data]
+        
+    def get_fixture_statistics(
+        self,
+        fixture_id: int
+    ) -> Dict[int, FixtureStatistics]:
+        """
+        Get detailed statistics for a specific fixture.
+        
+        Args:
+            fixture_id: ID of the fixture
+            
+        Returns:
+            Dict of FixtureStatistics objects, keyed by team ID
+        """
+        response = self.client.get_fixture_statistics(fixture_id=fixture_id)
+        stats_data = parse_response(response, error_handler=handle_api_error)
+        
+        result: Dict[int, FixtureStatistics] = {}
+        for item in stats_data:
+            stats = FixtureStatistics.from_api(item)
+            result[stats.team_id] = stats
+            
+        return result
+        
+    def get_fixture_lineups(
+        self,
+        fixture_id: int
+    ) -> Dict[int, TeamLineup]:
+        """
+        Get lineups for a specific fixture.
+        
+        Args:
+            fixture_id: ID of the fixture
+            
+        Returns:
+            Dict of TeamLineup objects, keyed by team ID
+        """
+        response = self.client.get_fixture_lineups(fixture_id=fixture_id)
+        lineups_data = parse_response(response, error_handler=handle_api_error)
+        
+        result: Dict[int, TeamLineup] = {}
+        for item in lineups_data:
+            lineup = TeamLineup.from_api(item)
+            result[lineup.team_id] = lineup
+            
+        return result
+        
+    def get_match_statistics(
+        self,
+        fixture_id: int
+    ) -> MatchStatistics:
+        """
+        Get comprehensive statistics for a match.
+        
+        Args:
+            fixture_id: ID of the fixture
+            
+        Returns:
+            MatchStatistics object containing events, team statistics, and lineups
+        """
+        try:
+            events = self.get_fixture_events(fixture_id)
+        except Exception as e:
+            logger.warning(f"Failed to get fixture events: {e}")
+            events = []
+            
+        try:
+            team_statistics = self.get_fixture_statistics(fixture_id)
+        except Exception as e:
+            logger.warning(f"Failed to get fixture statistics: {e}")
+            team_statistics = {}
+            
+        try:
+            lineups = self.get_fixture_lineups(fixture_id)
+        except Exception as e:
+            logger.warning(f"Failed to get fixture lineups: {e}")
+            lineups = {}
+            
+        return MatchStatistics(
+            events=events,
+            team_statistics=team_statistics,
+            lineups=lineups
+        )

@@ -403,5 +403,483 @@ def _display_fixtures(fixtures, format):
                 click.echo(f"Penalties: {pen_home}-{pen_away}")
 
 
+@click.group()
+def scores():
+    """Get match statistics."""
+    pass
+
+
+@scores.command(name="stats")
+@click.argument("fixture_id", type=int)
+def fixture_statistics(fixture_id):
+    """
+    Display detailed statistics for a specific match.
+    
+    Shows goals, cards, substitutions, lineups, and other statistics.
+    Requires the fixture ID as an argument.
+    """
+    from app.services.football_service import FootballService
+    from app.utils.error_handlers import APIError
+    from tabulate import tabulate
+    from colorama import Fore, Style, init
+    
+    # Initialize colorama
+    init()
+    
+    try:
+        service = FootballService()
+        
+        click.echo(f"Fetching statistics for fixture ID: {fixture_id}")
+        
+        # Get fixture information first
+        fixture = service.get_fixtures_by_id(fixture_id=fixture_id)
+        if not fixture:
+            click.echo(f"No fixture found with ID {fixture_id}.")
+            return
+            
+        # Display basic fixture information
+        click.echo(f"\n{Fore.BLUE}{Style.BRIGHT}Match: {fixture.home_team.name} vs {fixture.away_team.name}{Style.RESET_ALL}")
+        click.echo(f"Date: {fixture.date.strftime('%Y-%m-%d %H:%M')}")
+        if fixture.score and fixture.home_team.goals is not None and fixture.away_team.goals is not None:
+            click.echo(f"Score: {Fore.WHITE}{Style.BRIGHT}{fixture.home_team.goals}-{fixture.away_team.goals}{Style.RESET_ALL}")
+        
+        # Get match statistics
+        stats = service.get_match_statistics(fixture_id)
+        
+        # Display events (goals, cards, substitutions)
+        if stats.events:
+            click.echo(f"\n{Fore.GREEN}{Style.BRIGHT}Match Events:{Style.RESET_ALL}")
+            
+            # Organize events by type
+            goals = [e for e in stats.events if e.type == "Goal"]
+            cards = [e for e in stats.events if e.type == "Card"]
+            substitutions = [e for e in stats.events if e.type == "subst"]
+            
+            # Display goals
+            if goals:
+                click.echo(f"\n{Fore.YELLOW}Goals:{Style.RESET_ALL}")
+                goals_table = []
+                for goal in sorted(goals, key=lambda x: x.time):
+                    team_color = Fore.CYAN if goal.team_id == fixture.home_team.id else Fore.MAGENTA
+                    assist_text = f" (Assist: {goal.assist_player_name})" if goal.assist_player_name else ""
+                    goal_type = f" - {goal.detail}" if goal.detail != "Normal Goal" else ""
+                    
+                    goals_table.append([
+                        f"{goal.time}'",
+                        f"{team_color}{goal.team_name}{Style.RESET_ALL}",
+                        f"{goal.player_name}{goal_type}{assist_text}"
+                    ])
+                
+                click.echo(tabulate(goals_table, headers=["Time", "Team", "Scorer"], tablefmt="simple"))
+            
+            # Display cards
+            if cards:
+                click.echo(f"\n{Fore.YELLOW}Cards:{Style.RESET_ALL}")
+                cards_table = []
+                for card in sorted(cards, key=lambda x: x.time):
+                    team_color = Fore.CYAN if card.team_id == fixture.home_team.id else Fore.MAGENTA
+                    card_color = Fore.YELLOW if card.detail == "Yellow Card" else Fore.RED
+                    
+                    cards_table.append([
+                        f"{card.time}'",
+                        f"{team_color}{card.team_name}{Style.RESET_ALL}",
+                        f"{card_color}{card.detail}{Style.RESET_ALL}",
+                        f"{card.player_name}"
+                    ])
+                
+                click.echo(tabulate(cards_table, headers=["Time", "Team", "Card", "Player"], tablefmt="simple"))
+            
+            # Display substitutions
+            if substitutions:
+                click.echo(f"\n{Fore.YELLOW}Substitutions:{Style.RESET_ALL}")
+                subs_table = []
+                for sub in sorted(substitutions, key=lambda x: x.time):
+                    team_color = Fore.CYAN if sub.team_id == fixture.home_team.id else Fore.MAGENTA
+                    
+                    subs_table.append([
+                        f"{sub.time}'",
+                        f"{team_color}{sub.team_name}{Style.RESET_ALL}",
+                        f"{Fore.RED}◀ {sub.detail}{Style.RESET_ALL}",
+                        f"{Fore.GREEN}▶ {sub.player_name}{Style.RESET_ALL}"
+                    ])
+                
+                click.echo(tabulate(subs_table, headers=["Time", "Team", "Out", "In"], tablefmt="simple"))
+        
+        # Display team statistics
+        if stats.team_statistics:
+            click.echo(f"\n{Fore.GREEN}{Style.BRIGHT}Match Statistics:{Style.RESET_ALL}")
+            
+            # Create a table with both teams
+            stats_table = []
+            
+            # Get both team statistics
+            home_stats = stats.team_statistics.get(fixture.home_team.id)
+            away_stats = stats.team_statistics.get(fixture.away_team.id)
+            
+            if home_stats and away_stats:
+                # Find common statistics between both teams
+                home_stat_types = {stat.type for stat in home_stats.statistics}
+                away_stat_types = {stat.type for stat in away_stats.statistics}
+                common_stat_types = sorted(home_stat_types.intersection(away_stat_types))
+                
+                for stat_type in common_stat_types:
+                    home_value = next((stat.value for stat in home_stats.statistics if stat.type == stat_type), "-")
+                    away_value = next((stat.value for stat in away_stats.statistics if stat.type == stat_type), "-")
+                    
+                    stats_table.append([
+                        f"{Fore.CYAN}{home_value}{Style.RESET_ALL}",
+                        stat_type,
+                        f"{Fore.MAGENTA}{away_value}{Style.RESET_ALL}"
+                    ])
+                
+                # Create headers with team names
+                headers = [
+                    f"{Fore.CYAN}{fixture.home_team.name}{Style.RESET_ALL}",
+                    "Statistic",
+                    f"{Fore.MAGENTA}{fixture.away_team.name}{Style.RESET_ALL}"
+                ]
+                
+                click.echo(tabulate(stats_table, headers=headers, tablefmt="simple"))
+        
+        # Display lineups
+        if stats.lineups:
+            click.echo(f"\n{Fore.GREEN}{Style.BRIGHT}Lineups:{Style.RESET_ALL}")
+            
+            # Get both team lineups
+            home_lineup = stats.lineups.get(fixture.home_team.id)
+            away_lineup = stats.lineups.get(fixture.away_team.id)
+            
+            if home_lineup:
+                click.echo(f"\n{Fore.CYAN}{home_lineup.team_name} ({home_lineup.formation}){Style.RESET_ALL}")
+                click.echo(f"Coach: {home_lineup.coach}")
+                
+                # Starting XI
+                click.echo(f"\n{Fore.YELLOW}Starting XI:{Style.RESET_ALL}")
+                starters_table = []
+                for player in sorted(home_lineup.starters, key=lambda x: (x.position or "", x.name)):
+                    starters_table.append([
+                        f"{player.number}" if player.number else "-",
+                        player.name,
+                        player.position if player.position else "-"
+                    ])
+                
+                click.echo(tabulate(starters_table, headers=["#", "Player", "Position"], tablefmt="simple"))
+                
+                # Substitutes
+                click.echo(f"\n{Fore.YELLOW}Substitutes:{Style.RESET_ALL}")
+                subs_table = []
+                for player in sorted(home_lineup.substitutes, key=lambda x: (x.position or "", x.name)):
+                    subs_table.append([
+                        f"{player.number}" if player.number else "-",
+                        player.name,
+                        player.position if player.position else "-"
+                    ])
+                
+                click.echo(tabulate(subs_table, headers=["#", "Player", "Position"], tablefmt="simple"))
+            
+            if away_lineup:
+                click.echo(f"\n{Fore.MAGENTA}{away_lineup.team_name} ({away_lineup.formation}){Style.RESET_ALL}")
+                click.echo(f"Coach: {away_lineup.coach}")
+                
+                # Starting XI
+                click.echo(f"\n{Fore.YELLOW}Starting XI:{Style.RESET_ALL}")
+                starters_table = []
+                for player in sorted(away_lineup.starters, key=lambda x: (x.position or "", x.name)):
+                    starters_table.append([
+                        f"{player.number}" if player.number else "-",
+                        player.name,
+                        player.position if player.position else "-"
+                    ])
+                
+                click.echo(tabulate(starters_table, headers=["#", "Player", "Position"], tablefmt="simple"))
+                
+                # Substitutes
+                click.echo(f"\n{Fore.YELLOW}Substitutes:{Style.RESET_ALL}")
+                subs_table = []
+                for player in sorted(away_lineup.substitutes, key=lambda x: (x.position or "", x.name)):
+                    subs_table.append([
+                        f"{player.number}" if player.number else "-",
+                        player.name,
+                        player.position if player.position else "-"
+                    ])
+                
+                click.echo(tabulate(subs_table, headers=["#", "Player", "Position"], tablefmt="simple"))
+            
+    except APIError as e:
+        click.echo(f"API Error: {e.message}", err=True)
+    except Exception as e:
+        click.echo(f"Error: {str(e)}", err=True)
+
+
+@scores.command(name="lineup")
+@click.argument("fixture_id", type=int)
+@click.option(
+    "--visual/--no-visual", 
+    default=True,
+    help="Show visual formation representation."
+)
+def fixture_lineup(fixture_id, visual):
+    """
+    Display the lineup and formation for a specific match.
+    
+    Shows the complete starting XI, formation, substitutes, and coach information
+    for both teams in a match.
+    
+    Requires the fixture ID as an argument.
+    """
+    from app.services.football_service import FootballService
+    from app.utils.error_handlers import APIError
+    from tabulate import tabulate
+    from colorama import Fore, Style, init
+    
+    # Initialize colorama
+    init()
+    
+    try:
+        service = FootballService()
+        
+        click.echo(f"Fetching lineup information for fixture ID: {fixture_id}")
+        
+        # Get fixture information first
+        fixture = service.get_fixtures_by_id(fixture_id=fixture_id)
+        if not fixture:
+            click.echo(f"No fixture found with ID {fixture_id}.")
+            return
+            
+        # Get lineups
+        lineups = service.get_fixture_lineups(fixture_id)
+        
+        if not lineups:
+            click.echo("No lineup information available for this match.")
+            return
+            
+        # Display match header
+        click.echo(f"\n{Fore.BLUE}{Style.BRIGHT}Match: {fixture.home_team.name} vs {fixture.away_team.name}{Style.RESET_ALL}")
+        click.echo(f"Date: {fixture.date.strftime('%Y-%m-%d %H:%M')}")
+        
+        # Get both team lineups
+        home_lineup = lineups.get(fixture.home_team.id)
+        away_lineup = lineups.get(fixture.away_team.id)
+        
+        # Display home team lineup
+        if home_lineup:
+            click.echo(f"\n{Fore.CYAN}{Style.BRIGHT}{home_lineup.team_name}{Style.RESET_ALL}")
+            click.echo(f"Formation: {Fore.YELLOW}{home_lineup.formation}{Style.RESET_ALL}")
+            click.echo(f"Coach: {home_lineup.coach}")
+            
+            # Display starting XI in a visual formation if requested
+            if visual and home_lineup.formation:
+                click.echo(f"\n{Fore.GREEN}{Style.BRIGHT}Formation:{Style.RESET_ALL}")
+                _display_visual_formation(home_lineup)
+            
+            # Starting XI
+            click.echo(f"\n{Fore.GREEN}{Style.BRIGHT}Starting XI:{Style.RESET_ALL}")
+            starters_table = []
+            for player in sorted(home_lineup.starters, key=lambda x: (x.position or "", x.name)):
+                # Colorize by position
+                position_color = _get_position_color(player.position)
+                starters_table.append([
+                    f"{player.number}" if player.number else "-",
+                    f"{position_color}{player.name}{Style.RESET_ALL}",
+                    f"{position_color}{player.position}{Style.RESET_ALL}" if player.position else "-",
+                    player.grid or "-"
+                ])
+            
+            click.echo(tabulate(starters_table, headers=["#", "Player", "Position", "Grid"], tablefmt="simple"))
+            
+            # Substitutes
+            click.echo(f"\n{Fore.YELLOW}Substitutes:{Style.RESET_ALL}")
+            subs_table = []
+            for player in sorted(home_lineup.substitutes, key=lambda x: (x.position or "", x.name)):
+                position_color = _get_position_color(player.position)
+                subs_table.append([
+                    f"{player.number}" if player.number else "-",
+                    f"{position_color}{player.name}{Style.RESET_ALL}",
+                    f"{position_color}{player.position}{Style.RESET_ALL}" if player.position else "-"
+                ])
+            
+            click.echo(tabulate(subs_table, headers=["#", "Player", "Position"], tablefmt="simple"))
+        
+        # Display away team lineup
+        if away_lineup:
+            click.echo(f"\n{Fore.MAGENTA}{Style.BRIGHT}{away_lineup.team_name}{Style.RESET_ALL}")
+            click.echo(f"Formation: {Fore.YELLOW}{away_lineup.formation}{Style.RESET_ALL}")
+            click.echo(f"Coach: {away_lineup.coach}")
+            
+            # Display starting XI in a visual formation if requested
+            if visual and away_lineup.formation:
+                click.echo(f"\n{Fore.GREEN}{Style.BRIGHT}Formation:{Style.RESET_ALL}")
+                _display_visual_formation(away_lineup)
+            
+            # Starting XI
+            click.echo(f"\n{Fore.GREEN}{Style.BRIGHT}Starting XI:{Style.RESET_ALL}")
+            starters_table = []
+            for player in sorted(away_lineup.starters, key=lambda x: (x.position or "", x.name)):
+                # Colorize by position
+                position_color = _get_position_color(player.position)
+                starters_table.append([
+                    f"{player.number}" if player.number else "-",
+                    f"{position_color}{player.name}{Style.RESET_ALL}",
+                    f"{position_color}{player.position}{Style.RESET_ALL}" if player.position else "-",
+                    player.grid or "-"
+                ])
+            
+            click.echo(tabulate(starters_table, headers=["#", "Player", "Position", "Grid"], tablefmt="simple"))
+            
+            # Substitutes
+            click.echo(f"\n{Fore.YELLOW}Substitutes:{Style.RESET_ALL}")
+            subs_table = []
+            for player in sorted(away_lineup.substitutes, key=lambda x: (x.position or "", x.name)):
+                position_color = _get_position_color(player.position)
+                subs_table.append([
+                    f"{player.number}" if player.number else "-",
+                    f"{position_color}{player.name}{Style.RESET_ALL}",
+                    f"{position_color}{player.position}{Style.RESET_ALL}" if player.position else "-"
+                ])
+            
+            click.echo(tabulate(subs_table, headers=["#", "Player", "Position"], tablefmt="simple"))
+            
+    except APIError as e:
+        click.echo(f"API Error: {e.message}", err=True)
+    except Exception as e:
+        click.echo(f"Error: {str(e)}", err=True)
+
+def _get_position_color(position):
+    """Get color based on player position."""
+    from colorama import Fore
+    
+    if not position:
+        return ""
+        
+    position = position.lower()
+    
+    if "goalkeeper" in position or "gk" == position:
+        return Fore.YELLOW
+    elif "defender" in position or position in ["cb", "rb", "lb", "rwb", "lwb"]:
+        return Fore.BLUE
+    elif "midfielder" in position or position in ["cm", "cdm", "cam", "rm", "lm"]:
+        return Fore.GREEN
+    elif "forward" in position or "striker" in position or position in ["cf", "st", "rw", "lw"]:
+        return Fore.RED
+    else:
+        return ""
+
+def _display_visual_formation(lineup):
+    """Display a visual representation of the team formation."""
+    from colorama import Fore, Style
+    
+    if not lineup.formation:
+        return
+        
+    try:
+        # Parse formation
+        formation_parts = lineup.formation.split("-")
+        if not formation_parts:
+            return
+            
+        # Create a mapping of positions to players
+        position_players = {}
+        for player in lineup.starters:
+            if player.grid:
+                position_players[player.grid] = player
+        
+        # Defense line
+        positions = len(formation_parts)
+        width = 60  # Terminal width for the formation display
+        
+        # Create the pitch representation
+        lines = []
+        
+        # Add goalkeeper
+        gk_line = " " * (width // 2 - 5) + f"{Fore.YELLOW}(GK){Style.RESET_ALL}" + " " * (width // 2 - 5)
+        lines.append(gk_line)
+        
+        # Find goalkeeper
+        goalkeeper = next((p for p in lineup.starters if p.position and ("goalkeeper" in p.position.lower() or "gk" == p.position.lower())), None)
+        if goalkeeper:
+            gk_name = goalkeeper.name if len(goalkeeper.name) <= 20 else goalkeeper.name[:18] + ".."
+            gk_line = " " * (width // 2 - len(gk_name) // 2) + f"{Fore.YELLOW}{gk_name}{Style.RESET_ALL}" + " " * (width // 2 - len(gk_name) // 2)
+            lines.append(gk_line)
+            
+        lines.append("")  # Space
+        
+        # Add remaining lines based on formation
+        player_lines = []
+        
+        # For each line in the formation
+        for i, count in enumerate(formation_parts):
+            count = int(count)
+            line = []
+            
+            # Position name
+            position_name = ""
+            if i == 0:
+                position_name = f"{Fore.BLUE}Defenders{Style.RESET_ALL}"
+            elif i == len(formation_parts) - 1:
+                position_name = f"{Fore.RED}Forwards{Style.RESET_ALL}"
+            else:
+                position_name = f"{Fore.GREEN}Midfielders{Style.RESET_ALL}"
+                
+            # Center the position name
+            position_line = " " * (width // 2 - len(position_name) // 2 - 10) + position_name + " " * (width // 2 - len(position_name) // 2 - 10)
+            player_lines.append(position_line)
+            
+            # Space
+            player_lines.append("")
+                
+            # Find players for this line
+            players_in_line = []
+            for player in lineup.starters:
+                if not player.position:
+                    continue
+                    
+                position = player.position.lower()
+                
+                # Check if player belongs to this formation line
+                if i == 0 and ("defender" in position or position in ["cb", "rb", "lb", "rwb", "lwb"]):
+                    players_in_line.append(player)
+                elif i == len(formation_parts) - 1 and ("forward" in position or "striker" in position or position in ["cf", "st", "rw", "lw"]):
+                    players_in_line.append(player)
+                elif i > 0 and i < len(formation_parts) - 1 and ("midfielder" in position or position in ["cm", "cdm", "cam", "rm", "lm"]):
+                    players_in_line.append(player)
+            
+            # Sort players by grid position if available, otherwise by name
+            players_in_line.sort(key=lambda x: x.grid if x.grid else x.name)
+            
+            # Limit to formation count
+            players_in_line = players_in_line[:count]
+            
+            # Add players to the line
+            if players_in_line:
+                segment_width = width // (len(players_in_line) + 1)
+                player_slots = []
+                
+                for j, player in enumerate(players_in_line):
+                    position_color = _get_position_color(player.position)
+                    number = f"({player.number})" if player.number else ""
+                    player_name = player.name if len(player.name) <= 15 else player.name[:13] + ".."
+                    player_text = f"{position_color}{player_name} {number}{Style.RESET_ALL}"
+                    
+                    # Center in the slot
+                    slot = " " * (segment_width // 2 - len(player_name) // 2) + player_text + " " * (segment_width // 2 - len(player_name) // 2)
+                    player_slots.append(slot)
+                    
+                player_lines.append("".join(player_slots))
+                
+            player_lines.append("")  # Space
+            
+        # Add the player lines
+        lines.extend(player_lines)
+        
+        # Output the formation
+        for line in lines:
+            click.echo(line)
+            
+    except Exception as e:
+        # If any error occurs, just skip the visual representation
+        click.echo(f"Could not display visual formation: {e}")
+        return
+
+
 if __name__ == '__main__':
     main()

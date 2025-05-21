@@ -42,7 +42,6 @@ class FootballAPIClient:
         """
         return {
             "x-apisports-key": self.api_key,
-            "x-rapidapi-host": "v3.football.api-sports.io"
         }
 
     def _make_request(
@@ -253,3 +252,51 @@ class FootballAPIClient:
         }
 
         return self._make_request("standings", params)
+
+    def get_fixture_events(
+        self,
+        fixture_id: int
+    ) -> Dict[str, Any]:
+        """
+        Get event details (goals, cards, substitutions) for a specific fixture.
+        
+        Args:
+            fixture_id: ID of the fixture
+            
+        Returns:
+            Dict containing fixture event information
+        """
+        params = {"fixture": fixture_id}
+        return self._make_request("fixtures/events", params)
+        
+    def get_fixture_statistics(
+        self,
+        fixture_id: int
+    ) -> Dict[str, Any]:
+        """
+        Get detailed statistics for a specific fixture.
+        
+        Args:
+            fixture_id: ID of the fixture
+            
+        Returns:
+            Dict containing fixture statistics
+        """
+        params = {"fixture": fixture_id}
+        return self._make_request("fixtures/statistics", params)
+        
+    def get_fixture_lineups(
+        self,
+        fixture_id: int
+    ) -> Dict[str, Any]:
+        """
+        Get lineups for a specific fixture.
+        
+        Args:
+            fixture_id: ID of the fixture
+            
+        Returns:
+            Dict containing fixture lineup information
+        """
+        params = {"fixture": fixture_id}
+        return self._make_request("fixtures/lineups", params)
