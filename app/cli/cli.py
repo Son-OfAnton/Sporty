@@ -18,7 +18,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-logger.info("Logging is configured correctly.")
 
 
 def main():
@@ -28,12 +27,10 @@ def main():
     This function sets up the command-line interface and handles
     command execution.
     """
-    # Check if the script is being run directly
-    if __name__ == "__main__":
-        cli()
-    else:
-        # If imported, set up error handling
-        setup_error_handling()
+    # Set up error handling
+    setup_error_handling()
+    # Call the CLI directly
+    cli()
 
 
 @click.group()
@@ -287,53 +284,32 @@ def _display_fixtures(fixtures, format):
             else:
                 status_color = Fore.WHITE  # Other status
 
-            status_text = f"{status_color}{fixture.status.short}{Style.RESET_ALL}"
+            # Prepare the status display with elapsed time if applicable
+            status_display = fixture.status.short
+            if fixture.status.elapsed is not None and fixture.status.short not in ["NS", "FT", "PST", "CANC", "ABD", "SUSP"]:
+                status_display = f"{status_display} {fixture.status.elapsed}'"
 
-            # Add elapsed time for live matches
-            if hasattr(fixture, 'status') and hasattr(fixture.status, 'elapsed') and fixture.status.elapsed:
-                status_text += f" {fixture.status.elapsed}'"
+            # Format match time
+            match_time = fixture.date.strftime("%H:%M")
 
-            # Format score based on status
-            if fixture.status.short == "NS":
-                # Match not started
-                score_text = f"{Fore.WHITE}vs{Style.RESET_ALL}"
-            else:
-                # Match in progress or finished
-                home_goals = fixture.home_team.goals if fixture.home_team.goals is not None else 0
-                away_goals = fixture.away_team.goals if fixture.away_team.goals is not None else 0
-                score_text = f"{Fore.WHITE}{Style.BRIGHT}{home_goals} - {away_goals}{Style.RESET_ALL}"
-
-            # Format date/time for not started matches
-            date_text = ""
-            if fixture.status.short == "NS":
-                date_text = fixture.date.strftime("%H:%M")
-
+            # Add row to table data
             table_data.append([
-                status_text,
-                f"{fixture.home_team.name} {Fore.WHITE}vs{Style.RESET_ALL} {fixture.away_team.name}",
-                score_text,
-                date_text
+                match_time,
+                f"{status_color}{status_display}{Style.RESET_ALL}",
+                Fore.GREEN + fixture.home_team.name +
+                Style.RESET_ALL if fixture.home_team.winner else fixture.home_team.name,
+                fixture.score_display,
+                Fore.GREEN + fixture.away_team.name +
+                Style.RESET_ALL if fixture.away_team.winner else fixture.away_team.name
             ])
 
-        # Display table with the appropriate headers
-        headers = ["Status", "Match", "Score", "Time"]
-        if all(row[3] == "" for row in table_data):
-            # If no time column is used, don't show it
-            table_data = [row[0:3] for row in table_data]
-            headers = headers[0:3]
-
+        # Display table
+        headers = ["Time", "Status", "Home Team", "Score", "Away Team"]
         click.echo(tabulate(table_data, headers=headers, tablefmt="simple"))
-
-    elif format == "detailed":
-        # Detailed view for each fixture
+    else:
+        # Detailed format
         for fixture in fixtures:
-            click.echo("\n" + "─" * 60)
-
-            # Match header
-            click.echo(
-                f"{Fore.BLUE}{Style.BRIGHT}{fixture.home_team.name} vs {fixture.away_team.name}{Style.RESET_ALL}")
-
-            # Status
+            # Set status color based on match status
             if fixture.status.short in ["1H", "2H", "ET"]:
                 status_color = Fore.GREEN  # Live match
             elif fixture.status.short in ["HT", "BT"]:
@@ -347,76 +323,61 @@ def _display_fixtures(fixtures, format):
             else:
                 status_color = Fore.WHITE  # Other status
 
-            status_text = f"{status_color}{fixture.status.long}{Style.RESET_ALL}"
-            if hasattr(fixture, 'status') and hasattr(fixture.status, 'elapsed') and fixture.status.elapsed:
-                status_text += f" ({fixture.status.elapsed}')"
-            click.echo(f"Status: {status_text}")
+            # Format date and time
+            match_datetime = fixture.date.strftime("%Y-%m-%d %H:%M")
 
-            # Date and time
-            date_str = fixture.date.strftime("%Y-%m-%d %H:%M")
-            click.echo(f"Date: {date_str}")
+            # Venue and referee info if available
+            venue_info = f" at {fixture.venue}" if fixture.venue else ""
+            referee_info = f" (Referee: {fixture.referee})" if fixture.referee else ""
 
-            # Venue
-            if fixture.venue:
-                click.echo(f"Venue: {fixture.venue}")
+            # Status display
+            status_display = fixture.status.short
+            if fixture.status.elapsed is not None and fixture.status.short not in ["NS", "FT", "PST", "CANC", "ABD", "SUSP"]:
+                status_display = f"{status_display} {fixture.status.elapsed}'"
 
-            # Referee
-            if fixture.referee:
-                click.echo(f"Referee: {fixture.referee}")
-
-            # Score
-            if fixture.status.short != "NS":
-                home_goals = fixture.home_team.goals if fixture.home_team.goals is not None else 0
-                away_goals = fixture.away_team.goals if fixture.away_team.goals is not None else 0
-                click.echo(
-                    f"Score: {Fore.WHITE}{Style.BRIGHT}{home_goals}-{away_goals}{Style.RESET_ALL}")
-
-            # Teams
+            # Print header with match info
+            click.echo(f"\n{Fore.YELLOW}{Style.BRIGHT}{match_datetime}{Style.RESET_ALL}")
             click.echo(
-                f"Home: {Fore.CYAN}{fixture.home_team.name}{Style.RESET_ALL}")
+                f"{fixture.home_team.name} vs {fixture.away_team.name}{venue_info}{referee_info}")
             click.echo(
-                f"Away: {Fore.CYAN}{fixture.away_team.name}{Style.RESET_ALL}")
+                f"Status: {status_color}{fixture.status.long} ({status_display}){Style.RESET_ALL}")
 
-            # Additional score information if available
-            if fixture.score and fixture.score.halftime and fixture.status.short != "NS":
-                ht = fixture.score.halftime
-                ht_home = ht.get("home", 0)
-                ht_away = ht.get("away", 0)
-                click.echo(f"Halftime: {ht_home}-{ht_away}")
+            # Score information
+            click.echo(f"\nScore: {Fore.BRIGHT}{fixture.score_display}{Style.RESET_ALL}")
 
-            if fixture.score and fixture.score.fulltime and fixture.status.short == "FT":
-                ft = fixture.score.fulltime
-                ft_home = ft.get("home", 0)
-                ft_away = ft.get("away", 0)
-                click.echo(f"Fulltime: {ft_home}-{ft_away}")
+            # Additional score details if available
+            if fixture.score:
+                if fixture.score.halftime and fixture.score.halftime.get("home") is not None:
+                    home_ht = fixture.score.halftime.get("home", 0)
+                    away_ht = fixture.score.halftime.get("away", 0)
+                    click.echo(f"Halftime: {home_ht}-{away_ht}")
 
-            if fixture.score and fixture.score.extratime and any(v is not None for v in fixture.score.extratime.values()):
-                et = fixture.score.extratime
-                et_home = et.get("home", 0)
-                et_away = et.get("away", 0)
-                click.echo(f"Extra time: {et_home}-{et_away}")
+                if fixture.score.fulltime and fixture.score.fulltime.get("home") is not None:
+                    home_ft = fixture.score.fulltime.get("home", 0)
+                    away_ft = fixture.score.fulltime.get("away", 0)
+                    click.echo(f"Fulltime: {home_ft}-{away_ft}")
 
-            if fixture.score and fixture.score.penalty and any(v is not None for v in fixture.score.penalty.values()):
-                pen = fixture.score.penalty
-                pen_home = pen.get("home", 0)
-                pen_away = pen.get("away", 0)
-                click.echo(f"Penalties: {pen_home}-{pen_away}")
+                if fixture.score.extratime and fixture.score.extratime.get("home") is not None:
+                    home_et = fixture.score.extratime.get("home", 0)
+                    away_et = fixture.score.extratime.get("away", 0)
+                    click.echo(f"Extra Time: {home_et}-{away_et}")
 
+                if fixture.score.penalty and fixture.score.penalty.get("home") is not None:
+                    home_pen = fixture.score.penalty.get("home", 0)
+                    away_pen = fixture.score.penalty.get("away", 0)
+                    click.echo(f"Penalties: {home_pen}-{away_pen}")
 
-@click.group()
-def scores():
-    """Get match statistics."""
-    pass
+            # Add a separator line
+            click.echo(f"{'-'*50}")
 
 
-@scores.command(name="stats")
+@cli.command(name="stats")
 @click.argument("fixture_id", type=int)
 def fixture_statistics(fixture_id):
     """
-    Display detailed statistics for a specific match.
+    Display detailed statistics for a specific fixture.
     
-    Shows goals, cards, substitutions, lineups, and other statistics.
-    Requires the fixture ID as an argument.
+    FIXTURE_ID: ID of the fixture to display statistics for
     """
     from app.services.football_service import FootballService
     from app.utils.error_handlers import APIError
@@ -429,203 +390,186 @@ def fixture_statistics(fixture_id):
     try:
         service = FootballService()
         
-        click.echo(f"Fetching statistics for fixture ID: {fixture_id}")
+        # Get the fixture data first
+        matches = service.get_matches(
+            league_id=None,
+            team_id=None,
+            season=None,
+            date=None,
+            from_date=None,
+            to_date=None,
+            timezone="UTC",
+            live=False
+        )
         
-        # Get fixture information first
-        fixture = service.get_fixtures_by_id(fixture_id=fixture_id)
+        # Find the specific fixture
+        fixture = next((f for f in matches if f.id == fixture_id), None)
+        
+        # If fixture not found by ID, try to fetch it specifically
         if not fixture:
-            click.echo(f"No fixture found with ID {fixture_id}.")
-            return
+            click.echo(f"Fetching fixture {fixture_id}...")
+        else:
+            # Display basic fixture info
+            match_datetime = fixture.date.strftime("%Y-%m-%d %H:%M")
+            click.echo(f"\n{Fore.YELLOW}{Style.BRIGHT}{match_datetime} - {fixture.league.name}{Style.RESET_ALL}")
+            click.echo(f"{Fore.GREEN}{fixture.home_team.name} {fixture.score_display} {fixture.away_team.name}{Style.RESET_ALL}")
+            click.echo(f"Status: {fixture.status.long}\n")
             
-        # Display basic fixture information
-        click.echo(f"\n{Fore.BLUE}{Style.BRIGHT}Match: {fixture.home_team.name} vs {fixture.away_team.name}{Style.RESET_ALL}")
-        click.echo(f"Date: {fixture.date.strftime('%Y-%m-%d %H:%M')}")
-        if fixture.score and fixture.home_team.goals is not None and fixture.away_team.goals is not None:
-            click.echo(f"Score: {Fore.WHITE}{Style.BRIGHT}{fixture.home_team.goals}-{fixture.away_team.goals}{Style.RESET_ALL}")
-        
-        # Get match statistics
+        # Get comprehensive statistics
         stats = service.get_match_statistics(fixture_id)
         
-        # Display events (goals, cards, substitutions)
-        if stats.events:
-            click.echo(f"\n{Fore.GREEN}{Style.BRIGHT}Match Events:{Style.RESET_ALL}")
-            
-            # Organize events by type
+        # 1. Display Events (Goals, Cards, Substitutions)
+        click.echo(f"{Fore.CYAN}{Style.BRIGHT}Match Events:{Style.RESET_ALL}")
+        
+        if not stats.events:
+            click.echo("No events recorded for this match.")
+        else:
+            # Group events by type
             goals = [e for e in stats.events if e.type == "Goal"]
             cards = [e for e in stats.events if e.type == "Card"]
-            substitutions = [e for e in stats.events if e.type == "subst"]
+            subs = [e for e in stats.events if e.type == "Substitution"]
             
             # Display goals
             if goals:
-                click.echo(f"\n{Fore.YELLOW}Goals:{Style.RESET_ALL}")
+                click.echo(f"\n{Fore.GREEN}Goals:{Style.RESET_ALL}")
                 goals_table = []
                 for goal in sorted(goals, key=lambda x: x.time):
-                    team_color = Fore.CYAN if goal.team_id == fixture.home_team.id else Fore.MAGENTA
-                    assist_text = f" (Assist: {goal.assist_player_name})" if goal.assist_player_name else ""
-                    goal_type = f" - {goal.detail}" if goal.detail != "Normal Goal" else ""
-                    
+                    assist = f" (Assist: {goal.assist_player_name})" if goal.assist_player_name else ""
                     goals_table.append([
                         f"{goal.time}'",
-                        f"{team_color}{goal.team_name}{Style.RESET_ALL}",
-                        f"{goal.player_name}{goal_type}{assist_text}"
+                        goal.team_name,
+                        f"{goal.player_name}{assist}",
+                        goal.detail
                     ])
+                click.echo(tabulate(goals_table, headers=["Time", "Team", "Scorer", "Type"], tablefmt="simple"))
                 
-                click.echo(tabulate(goals_table, headers=["Time", "Team", "Scorer"], tablefmt="simple"))
-            
             # Display cards
             if cards:
                 click.echo(f"\n{Fore.YELLOW}Cards:{Style.RESET_ALL}")
                 cards_table = []
                 for card in sorted(cards, key=lambda x: x.time):
-                    team_color = Fore.CYAN if card.team_id == fixture.home_team.id else Fore.MAGENTA
-                    card_color = Fore.YELLOW if card.detail == "Yellow Card" else Fore.RED
-                    
+                    card_color = Fore.YELLOW if "yellow" in card.detail.lower() else Fore.RED
                     cards_table.append([
                         f"{card.time}'",
-                        f"{team_color}{card.team_name}{Style.RESET_ALL}",
-                        f"{card_color}{card.detail}{Style.RESET_ALL}",
-                        f"{card.player_name}"
+                        card.team_name,
+                        card.player_name,
+                        f"{card_color}{card.detail}{Style.RESET_ALL}"
                     ])
+                click.echo(tabulate(cards_table, headers=["Time", "Team", "Player", "Card"], tablefmt="simple"))
                 
-                click.echo(tabulate(cards_table, headers=["Time", "Team", "Card", "Player"], tablefmt="simple"))
-            
             # Display substitutions
-            if substitutions:
-                click.echo(f"\n{Fore.YELLOW}Substitutions:{Style.RESET_ALL}")
+            if subs:
+                click.echo(f"\n{Fore.BLUE}Substitutions:{Style.RESET_ALL}")
                 subs_table = []
-                for sub in sorted(substitutions, key=lambda x: x.time):
-                    team_color = Fore.CYAN if sub.team_id == fixture.home_team.id else Fore.MAGENTA
-                    
+                for sub in sorted(subs, key=lambda x: x.time):
+                    # For substitutions, the comment typically contains the player going out
+                    player_out = sub.comments or "Unknown"
                     subs_table.append([
                         f"{sub.time}'",
-                        f"{team_color}{sub.team_name}{Style.RESET_ALL}",
-                        f"{Fore.RED}◀ {sub.detail}{Style.RESET_ALL}",
-                        f"{Fore.GREEN}▶ {sub.player_name}{Style.RESET_ALL}"
+                        sub.team_name,
+                        f"{Fore.GREEN}IN: {sub.player_name}{Style.RESET_ALL}",
+                        f"{Fore.RED}OUT: {player_out}{Style.RESET_ALL}"
                     ])
-                
-                click.echo(tabulate(subs_table, headers=["Time", "Team", "Out", "In"], tablefmt="simple"))
+                click.echo(tabulate(subs_table, headers=["Time", "Team", "In", "Out"], tablefmt="simple"))
         
-        # Display team statistics
-        if stats.team_statistics:
-            click.echo(f"\n{Fore.GREEN}{Style.BRIGHT}Match Statistics:{Style.RESET_ALL}")
-            
-            # Create a table with both teams
-            stats_table = []
-            
-            # Get both team statistics
-            home_stats = stats.team_statistics.get(fixture.home_team.id)
-            away_stats = stats.team_statistics.get(fixture.away_team.id)
-            
-            if home_stats and away_stats:
-                # Find common statistics between both teams
-                home_stat_types = {stat.type for stat in home_stats.statistics}
-                away_stat_types = {stat.type for stat in away_stats.statistics}
-                common_stat_types = sorted(home_stat_types.intersection(away_stat_types))
+        # 2. Display Team Statistics
+        click.echo(f"\n{Fore.CYAN}{Style.BRIGHT}Team Statistics:{Style.RESET_ALL}")
+        
+        if not stats.team_statistics:
+            click.echo("No team statistics available for this match.")
+        else:
+            # Get both teams' statistics
+            teams = list(stats.team_statistics.values())
+            if len(teams) == 2:
+                # Create a side-by-side comparison
+                stats_table = []
                 
-                for stat_type in common_stat_types:
-                    home_value = next((stat.value for stat in home_stats.statistics if stat.type == stat_type), "-")
-                    away_value = next((stat.value for stat in away_stats.statistics if stat.type == stat_type), "-")
+                # Get all unique stat types from both teams
+                stat_types = set()
+                for team in teams:
+                    for stat in team.statistics:
+                        stat_types.add(stat.type)
+                
+                # Sort stat types for consistent display
+                sorted_stat_types = sorted(stat_types)
+                
+                # Create the side-by-side comparison
+                for stat_type in sorted_stat_types:
+                    row = [stat_type]
                     
-                    stats_table.append([
-                        f"{Fore.CYAN}{home_value}{Style.RESET_ALL}",
-                        stat_type,
-                        f"{Fore.MAGENTA}{away_value}{Style.RESET_ALL}"
-                    ])
+                    for team in teams:
+                        # Find this statistic for this team
+                        team_stat = next((s for s in team.statistics if s.type == stat_type), None)
+                        if team_stat:
+                            row.append(str(team_stat.value))
+                        else:
+                            row.append("N/A")
+                    
+                    stats_table.append(row)
                 
-                # Create headers with team names
-                headers = [
-                    f"{Fore.CYAN}{fixture.home_team.name}{Style.RESET_ALL}",
-                    "Statistic",
-                    f"{Fore.MAGENTA}{fixture.away_team.name}{Style.RESET_ALL}"
-                ]
-                
-                click.echo(tabulate(stats_table, headers=headers, tablefmt="simple"))
+                # Display the table
+                click.echo(tabulate(stats_table, headers=["Statistic", teams[0].team_name, teams[1].team_name], tablefmt="simple"))
+            else:
+                # Display stats for each team individually
+                for team in teams:
+                    click.echo(f"\n{Fore.GREEN}{team.team_name}:{Style.RESET_ALL}")
+                    stats_table = []
+                    for stat in sorted(team.statistics, key=lambda x: x.type):
+                        stats_table.append([stat.type, stat.value])
+                    click.echo(tabulate(stats_table, headers=["Statistic", "Value"], tablefmt="simple"))
         
-        # Display lineups
-        if stats.lineups:
-            click.echo(f"\n{Fore.GREEN}{Style.BRIGHT}Lineups:{Style.RESET_ALL}")
-            
-            # Get both team lineups
-            home_lineup = stats.lineups.get(fixture.home_team.id)
-            away_lineup = stats.lineups.get(fixture.away_team.id)
-            
-            if home_lineup:
-                click.echo(f"\n{Fore.CYAN}{home_lineup.team_name} ({home_lineup.formation}){Style.RESET_ALL}")
-                click.echo(f"Coach: {home_lineup.coach}")
+        # 3. Display Lineups
+        click.echo(f"\n{Fore.CYAN}{Style.BRIGHT}Team Lineups:{Style.RESET_ALL}")
+        
+        if not stats.lineups:
+            click.echo("No lineup information available for this match.")
+        else:
+            for team_id, lineup in stats.lineups.items():
+                click.echo(f"\n{Fore.GREEN}{lineup.team_name}{Style.RESET_ALL}")
+                click.echo(f"Formation: {lineup.formation}")
+                click.echo(f"Coach: {lineup.coach}\n")
                 
                 # Starting XI
-                click.echo(f"\n{Fore.YELLOW}Starting XI:{Style.RESET_ALL}")
+                click.echo(f"{Fore.YELLOW}Starting XI:{Style.RESET_ALL}")
                 starters_table = []
-                for player in sorted(home_lineup.starters, key=lambda x: (x.position or "", x.name)):
+                for player in sorted(lineup.starters, key=lambda x: (x.position or "", x.grid or "", x.name)):
                     starters_table.append([
                         f"{player.number}" if player.number else "-",
                         player.name,
-                        player.position if player.position else "-"
+                        player.position or "-",
+                        player.grid or "-"
                     ])
-                
-                click.echo(tabulate(starters_table, headers=["#", "Player", "Position"], tablefmt="simple"))
+                click.echo(tabulate(starters_table, headers=["#", "Player", "Position", "Grid"], tablefmt="simple"))
                 
                 # Substitutes
                 click.echo(f"\n{Fore.YELLOW}Substitutes:{Style.RESET_ALL}")
                 subs_table = []
-                for player in sorted(home_lineup.substitutes, key=lambda x: (x.position or "", x.name)):
+                for player in sorted(lineup.substitutes, key=lambda x: (x.position or "", x.name)):
                     subs_table.append([
                         f"{player.number}" if player.number else "-",
                         player.name,
-                        player.position if player.position else "-"
+                        player.position or "-"
                     ])
-                
                 click.echo(tabulate(subs_table, headers=["#", "Player", "Position"], tablefmt="simple"))
-            
-            if away_lineup:
-                click.echo(f"\n{Fore.MAGENTA}{away_lineup.team_name} ({away_lineup.formation}){Style.RESET_ALL}")
-                click.echo(f"Coach: {away_lineup.coach}")
-                
-                # Starting XI
-                click.echo(f"\n{Fore.YELLOW}Starting XI:{Style.RESET_ALL}")
-                starters_table = []
-                for player in sorted(away_lineup.starters, key=lambda x: (x.position or "", x.name)):
-                    starters_table.append([
-                        f"{player.number}" if player.number else "-",
-                        player.name,
-                        player.position if player.position else "-"
-                    ])
-                
-                click.echo(tabulate(starters_table, headers=["#", "Player", "Position"], tablefmt="simple"))
-                
-                # Substitutes
-                click.echo(f"\n{Fore.YELLOW}Substitutes:{Style.RESET_ALL}")
-                subs_table = []
-                for player in sorted(away_lineup.substitutes, key=lambda x: (x.position or "", x.name)):
-                    subs_table.append([
-                        f"{player.number}" if player.number else "-",
-                        player.name,
-                        player.position if player.position else "-"
-                    ])
-                
-                click.echo(tabulate(subs_table, headers=["#", "Player", "Position"], tablefmt="simple"))
-            
+        
     except APIError as e:
         click.echo(f"API Error: {e.message}", err=True)
     except Exception as e:
         click.echo(f"Error: {str(e)}", err=True)
 
 
-@scores.command(name="lineup")
+@cli.command(name="lineup")
 @click.argument("fixture_id", type=int)
 @click.option(
-    "--visual/--no-visual", 
+    "--visual/--no-visual",
     default=True,
-    help="Show visual formation representation."
+    help="Display visual representation of formation."
 )
 def fixture_lineup(fixture_id, visual):
     """
-    Display the lineup and formation for a specific match.
+    Display detailed lineup information for a specific fixture.
     
-    Shows the complete starting XI, formation, substitutes, and coach information
-    for both teams in a match.
-    
-    Requires the fixture ID as an argument.
+    FIXTURE_ID: ID of the fixture to display lineups for
     """
     from app.services.football_service import FootballService
     from app.utils.error_handlers import APIError
@@ -638,32 +582,58 @@ def fixture_lineup(fixture_id, visual):
     try:
         service = FootballService()
         
-        click.echo(f"Fetching lineup information for fixture ID: {fixture_id}")
-        
-        # Get fixture information first
-        fixture = service.get_fixtures_by_id(fixture_id=fixture_id)
-        if not fixture:
-            click.echo(f"No fixture found with ID {fixture_id}.")
-            return
-            
         # Get lineups
         lineups = service.get_fixture_lineups(fixture_id)
         
         if not lineups:
-            click.echo("No lineup information available for this match.")
+            click.echo("No lineup information available for this fixture.")
             return
             
-        # Display match header
-        click.echo(f"\n{Fore.BLUE}{Style.BRIGHT}Match: {fixture.home_team.name} vs {fixture.away_team.name}{Style.RESET_ALL}")
-        click.echo(f"Date: {fixture.date.strftime('%Y-%m-%d %H:%M')}")
+        # Get the fixture basic information if possible
+        try:
+            fixtures = service.get_matches(
+                league_id=None,
+                team_id=None,
+                season=None,
+                date=None,
+                from_date=None,
+                to_date=None,
+                timezone="UTC",
+                live=False
+            )
+            
+            fixture = next((f for f in fixtures if f.id == fixture_id), None)
+            if fixture:
+                match_datetime = fixture.date.strftime("%Y-%m-%d %H:%M")
+                click.echo(f"\n{Fore.YELLOW}{Style.BRIGHT}{match_datetime} - {fixture.league.name}{Style.RESET_ALL}")
+                click.echo(f"{Fore.GREEN}{fixture.home_team.name} vs {fixture.away_team.name}{Style.RESET_ALL}")
+                click.echo(f"Status: {fixture.status.long}\n")
+        except Exception as e:
+            # If we can't get the fixture info, just continue with lineups
+            pass
+            
+        # Display home team lineup
+        home_lineup = None
+        away_lineup = None
         
-        # Get both team lineups
-        home_lineup = lineups.get(fixture.home_team.id)
-        away_lineup = lineups.get(fixture.away_team.id)
-        
+        # Try to determine which is home and away team
+        if fixture:
+            home_id = fixture.home_team.id
+            away_id = fixture.away_team.id
+            
+            home_lineup = lineups.get(home_id)
+            away_lineup = lineups.get(away_id)
+        else:
+            # If we don't have fixture info, just use the first and second teams
+            team_ids = list(lineups.keys())
+            if len(team_ids) >= 1:
+                home_lineup = lineups.get(team_ids[0])
+            if len(team_ids) >= 2:
+                away_lineup = lineups.get(team_ids[1])
+                
         # Display home team lineup
         if home_lineup:
-            click.echo(f"\n{Fore.CYAN}{Style.BRIGHT}{home_lineup.team_name}{Style.RESET_ALL}")
+            click.echo(f"{Fore.MAGENTA}{Style.BRIGHT}{home_lineup.team_name}{Style.RESET_ALL}")
             click.echo(f"Formation: {Fore.YELLOW}{home_lineup.formation}{Style.RESET_ALL}")
             click.echo(f"Coach: {home_lineup.coach}")
             
