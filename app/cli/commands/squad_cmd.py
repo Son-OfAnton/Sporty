@@ -38,13 +38,12 @@ def team_squad(team_id, season):
             season = service.get_current_season()
             click.echo(f"No season specified, using current season ({season})...")
             
-        # Get team info
-        teams = service.get_teams(team_id=team_id, season=season)
-        if not teams:
-            click.echo(f"Team with ID {team_id} not found for season {season}.")
+        # First, get team info using get_team (not get_teams)
+        team = service.get_team(team_id)
+        if not team:
+            click.echo(f"Team with ID {team_id} not found.")
             return
             
-        team = teams[0]
         click.echo(f"\n{Fore.GREEN}{Style.BRIGHT}{team.name}{Style.RESET_ALL}")
         click.echo(f"Country: {team.country}")
         if team.founded:
@@ -53,7 +52,7 @@ def team_squad(team_id, season):
             click.echo(f"Venue: {team.venue_name}")
         click.echo(f"Season: {season}")
         
-        # Get squad players
+        # Then, get squad players for that team and season
         players = service.get_players(team_id=team_id, season=season)
         
         if not players:

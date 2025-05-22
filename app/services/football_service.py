@@ -45,19 +45,13 @@ class FootballService:
 
         return [League.from_api(item) for item in leagues_data]
 
-    def get_teams(
-        self,
-        league_id: Optional[int] = None,
-        team_id: Optional[int] = None,
-        season: Optional[int] = None
-    ) -> List[Team]:
+    def get_teams(self, league_id: int, season: Optional[int] = None) -> List[Team]:
         """
-        Get teams information.
+        Get teams information for a specific league and season.
 
         Args:
-            league_id: League ID (optional)
-            team_id: Team ID (optional)
-            season: Season year
+            league_id: League ID
+            season: Season year (defaults to current season)
 
         Returns:
             List of Team objects
@@ -65,19 +59,29 @@ class FootballService:
         # If no season is specified, use the current season
         if season is None:
             season = self.get_current_season()
-
-        # Prepare parameters
-        params: Dict[str, Any] = {}
-        if league_id is not None:
-            params["league"] = league_id
-        if team_id is not None:
-            params["id"] = team_id
-        params["season"] = season
-
-        response = self.client.get_teams(**params)
+            
+        response = self.client.get_teams(league=league_id, season=season)
         teams_data = parse_response(response, error_handler=handle_api_error)
 
         return [Team.from_api(item) for item in teams_data]
+
+    def get_team(self, team_id: int) -> Optional[Team]:
+        """
+        Get information for a specific team by ID.
+
+        Args:
+            team_id: Team ID
+
+        Returns:
+            Team object or None if team not found
+        """
+        response = self.client.get_team(team_id=team_id)
+        team_data = parse_response(response, error_handler=handle_api_error)
+
+        if not team_data:
+            return None
+
+        return Team.from_api(team_data[0])
 
     def get_fixtures(
         self,
@@ -117,17 +121,21 @@ class FootballService:
 
         return [Fixture.from_api(item) for item in fixtures_data]
 
-    def get_players(self, team_id: int, season: int) -> List[Player]:
+    def get_players(self, team_id: int, season: Optional[int] = None) -> List[Player]:
         """
         Get players information for a specific team and season.
 
         Args:
             team_id: Team ID
-            season: Season year
+            season: Season year (defaults to current season)
 
         Returns:
             List of Player objects
         """
+        # If no season is specified, use the current season
+        if season is None:
+            season = self.get_current_season()
+            
         response = self.client.get_players(team_id=team_id, season=season)
         players_data = parse_response(response, error_handler=handle_api_error)
 
