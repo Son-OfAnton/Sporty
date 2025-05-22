@@ -38,7 +38,7 @@ def team_squad(team_id, season):
             season = service.get_current_season()
             click.echo(f"No season specified, using current season ({season})...")
             
-        # First, get team info using get_team (not get_teams)
+        # First, get team info
         team = service.get_team(team_id)
         if not team:
             click.echo(f"Team with ID {team_id} not found.")
@@ -52,12 +52,20 @@ def team_squad(team_id, season):
             click.echo(f"Venue: {team.venue_name}")
         click.echo(f"Season: {season}")
         
-        # Then, get squad players for that team and season
+        # Then, get squad players
         players = service.get_players(team_id=team_id, season=season)
         
         if not players:
             click.echo("\nNo player data available for this team and season.")
             return
+            
+        # Show total players found - debug info
+        logger.debug(f"Found {len(players)} players")
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            # When in debug mode, show some details about the first player
+            if players:
+                first_player = players[0]
+                logger.debug(f"First player: ID={first_player.id}, Name={first_player.name}, Position={first_player.position}")
             
         # Group players by position
         goalkeepers = []
@@ -65,6 +73,15 @@ def team_squad(team_id, season):
         midfielders = []
         forwards = []
         others = []
+        
+        # Debug info - count positions before grouping
+        position_counts = {}
+        for player in players:
+            pos = player.position.lower() if player.position else "unknown"
+            position_counts[pos] = position_counts.get(pos, 0) + 1
+        
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            logger.debug(f"Position counts: {position_counts}")
         
         for player in players:
             if not player.position:
@@ -107,6 +124,7 @@ def team_squad(team_id, season):
     except APIError as e:
         click.echo(f"API Error: {e.message}", err=True)
     except Exception as e:
+        logger.exception("Error in team_squad command")
         click.echo(f"Error: {str(e)}", err=True)
 
 
@@ -118,6 +136,10 @@ def _display_players(players):
     for player in sorted(players, key=lambda p: p.name):
         position_color = get_position_color(player.position)
         
+        # Debug info when position is missing
+        if not player.position and logging.getLogger().isEnabledFor(logging.DEBUG):
+            logger.debug(f"Player without position: {player.id} - {player.name}")
+            
         table_data.append([
             str(player.id),
             f"{position_color}{player.name}{Style.RESET_ALL}",

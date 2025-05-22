@@ -279,44 +279,71 @@ class FootballAPIClient:
     ) -> Dict[str, Any]:
         """
         Get event details (goals, cards, substitutions) for a specific fixture.
-        
+
         Args:
             fixture_id: ID of the fixture
-            
+
         Returns:
             Dict containing fixture event information
         """
         params = {"fixture": fixture_id}
         return self._make_request("fixtures/events", params)
-        
+
     def get_fixture_statistics(
         self,
         fixture_id: int
     ) -> Dict[str, Any]:
         """
         Get detailed statistics for a specific fixture.
-        
+
         Args:
             fixture_id: ID of the fixture
-            
+
         Returns:
             Dict containing fixture statistics
         """
         params = {"fixture": fixture_id}
         return self._make_request("fixtures/statistics", params)
-        
+
     def get_fixture_lineups(
         self,
         fixture_id: int
     ) -> Dict[str, Any]:
         """
         Get lineups for a specific fixture.
-        
+
         Args:
             fixture_id: ID of the fixture
-            
+
         Returns:
             Dict containing fixture lineup information
         """
         params = {"fixture": fixture_id}
         return self._make_request("fixtures/lineups", params)
+
+    def get_team_statistics(
+        self,
+        team: int,
+        season: int,
+        league: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Get comprehensive statistics for a team in a specific season.
+
+        Args:
+            team: Team ID
+            season: Season year
+            league: League ID (optional)
+
+        Returns:
+            Dict containing comprehensive team statistics
+        """
+        params = {
+            "team": team,
+            "season": season
+        }
+
+        if league:
+            params["league"] = league
+
+        return self._make_request("teams/statistics", params)
