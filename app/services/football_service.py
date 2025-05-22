@@ -45,18 +45,36 @@ class FootballService:
 
         return [League.from_api(item) for item in leagues_data]
 
-    def get_teams(self, league_id: int, season: int) -> List[Team]:
+    def get_teams(
+        self,
+        league_id: Optional[int] = None,
+        team_id: Optional[int] = None,
+        season: Optional[int] = None
+    ) -> List[Team]:
         """
-        Get teams information for a specific league and season.
+        Get teams information.
 
         Args:
-            league_id: League ID
+            league_id: League ID (optional)
+            team_id: Team ID (optional)
             season: Season year
 
         Returns:
             List of Team objects
         """
-        response = self.client.get_teams(league_id=league_id, season=season)
+        # If no season is specified, use the current season
+        if season is None:
+            season = self.get_current_season()
+
+        # Prepare parameters
+        params: Dict[str, Any] = {}
+        if league_id is not None:
+            params["league"] = league_id
+        if team_id is not None:
+            params["id"] = team_id
+        params["season"] = season
+
+        response = self.client.get_teams(**params)
         teams_data = parse_response(response, error_handler=handle_api_error)
 
         return [Team.from_api(item) for item in teams_data]

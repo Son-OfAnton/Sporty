@@ -113,21 +113,30 @@ class FootballAPIClient:
 
         return self._make_request("leagues", params)
 
-    def get_teams(self, league_id: int, season: int) -> Dict[str, Any]:
+    def get_teams(
+        self,
+        league: Optional[int] = None,
+        id: Optional[int] = None,
+        season: int = None
+    ) -> Dict[str, Any]:
         """
-        Get teams information for a specific league and season.
+        Get teams information.
 
         Args:
-            league_id: League ID
+            league: League ID (optional)
+            id: Team ID (optional)
             season: Season year
 
         Returns:
             Dict containing teams information
         """
-        params = {
-            "league": league_id,
-            "season": season
-        }
+        params: Dict[str, Any] = {}
+        if league is not None:
+            params["league"] = league
+        if id is not None:
+            params["id"] = id
+        if season is not None:
+            params["season"] = season
 
         return self._make_request("teams", params)
 
@@ -258,42 +267,42 @@ class FootballAPIClient:
     ) -> Dict[str, Any]:
         """
         Get event details (goals, cards, substitutions) for a specific fixture.
-        
+
         Args:
             fixture_id: ID of the fixture
-            
+
         Returns:
             Dict containing fixture event information
         """
         params = {"fixture": fixture_id}
         return self._make_request("fixtures/events", params)
-        
+
     def get_fixture_statistics(
         self,
         fixture_id: int
     ) -> Dict[str, Any]:
         """
         Get detailed statistics for a specific fixture.
-        
+
         Args:
             fixture_id: ID of the fixture
-            
+
         Returns:
             Dict containing fixture statistics
         """
         params = {"fixture": fixture_id}
         return self._make_request("fixtures/statistics", params)
-        
+
     def get_fixture_lineups(
         self,
         fixture_id: int
     ) -> Dict[str, Any]:
         """
         Get lineups for a specific fixture.
-        
+
         Args:
             fixture_id: ID of the fixture
-            
+
         Returns:
             Dict containing fixture lineup information
         """
