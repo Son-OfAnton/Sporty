@@ -67,8 +67,7 @@ class FootballAPIClient:
         url = urljoin(self.BASE_URL, endpoint)
         headers = self._get_headers()
         logger.info(f"URL: {url}")
-        logger.info(f"Headers: {headers}")
-
+        logger.info(f"Params: {params}")
         try:
             if method.upper() == "GET":
                 response = requests.get(

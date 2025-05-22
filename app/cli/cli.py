@@ -133,13 +133,6 @@ def match_scores(league, team, country, date, from_date, to_date, season, live, 
     try:
         service = FootballService()
 
-        # If no specific date is provided and not in live mode,
-        # default to today's date
-        if not live and not date and not from_date and not to_date:
-            date = datetime.now().strftime("%Y-%m-%d")
-            click.echo(
-                f"No date specified, showing matches for today ({date})...")
-
         # Set up header text
         header_parts = []
         if live:
