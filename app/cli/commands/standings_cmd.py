@@ -5,11 +5,13 @@ CLI commands for handling league standings data.
 import click
 import logging
 import datetime
+from typing import Dict, Any, Optional, List
 from tabulate import tabulate
 from colorama import Fore, Style, init
 
 from app.utils.error_handlers import APIError
 from app.services.football_service import FootballService
+from app.models.football_data import TeamStanding
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +46,22 @@ def standings():
     type=int,
     required=False
 )
-def league_standings(league, name, country, season):
+@click.option(
+    "--filter", "-f",
+    help="Filter standings by home/away/all matches.",
+    type=click.Choice(["all", "home", "away"]),
+    default="all"
+)
+def league_standings(league, name, country, season, filter):
     """
     Display current league standings for a specific league and season.
 
     Displays team rankings, points, wins, draws, losses, and goal statistics.
     
     Specify league either by ID or by name.
+    
+    Filter option allows you to see standings based on only home matches,
+    only away matches, or all matches (default).
     """
     # Initialize colorama
     init()
@@ -97,7 +108,13 @@ def league_standings(league, name, country, season):
             click.echo("Please specify a league ID or name.")
             return
             
-        click.echo(f"Fetching standings for league ID {league} in season {season}...\n")
+        filter_text = ""
+        if filter == "home":
+            filter_text = " (HOME MATCHES ONLY)"
+        elif filter == "away":
+            filter_text = " (AWAY MATCHES ONLY)"
+            
+        click.echo(f"Fetching standings for league ID {league} in season {season}{filter_text}...\n")
         
         # Get standings
         standings_list = service.get_standings(league_id=league, season=season)
@@ -106,38 +123,50 @@ def league_standings(league, name, country, season):
             click.echo("No standings found for the specified league and season.")
             return
             
+        # Get the raw API response to access home and away data
+        raw_response = service.client._make_request("standings", {"league": league, "season": season})
+        standings_data = raw_response.get('response', [])
+        
         # Format data for tabulate
         headers = ["Pos", "Team", "P", "W", "D", "L", "GF", "GA", "GD", "Pts"]
         table_data = []
         
-        for standing in standings_list:
-            # Calculate goal difference
-            gd = standing.goal_difference
-            gd_str = f"{gd:+d}" if gd != 0 else "0"
-            
-            # Add row to table
-            row = [
-                # Position with color for top 4, relegation zone, etc.
-                _format_position(standing.rank),
-                standing.team.name,
-                standing.played,
-                standing.win,
-                standing.draw,
-                standing.lose,
-                standing.goals_for,
-                standing.goals_against,
-                gd_str,
-                f"{Fore.CYAN}{Style.BRIGHT}{standing.points}{Style.RESET_ALL}"
-            ]
-            
-            table_data.append(row)
-        
-        # Display the table
-        click.echo(tabulate(table_data, headers=headers, tablefmt="pretty"))
+        # If we have raw data and a valid filter, use it to create a filtered view
+        if standings_data and filter in ["home", "away"]:
+            # Extract the standings array from the first league
+            try:
+                league_data = standings_data[0].get("league", {})
+                standings_array = league_data.get("standings", [])
+                
+                # Handle nested standings (some leagues have multiple groups)
+                if standings_array and isinstance(standings_array[0], list):
+                    standings_array = standings_array[0]
+                
+                # Process and display the filtered standings
+                filtered_standings_rows = _process_filtered_standings(standings_array, filter)
+                
+                if not filtered_standings_rows:
+                    click.echo(f"Unable to get {filter} standings data for this league.")
+                    # Fall back to the original standings
+                    _display_standard_standings(standings_list)
+                else:
+                    # Display the filtered standings
+                    click.echo(tabulate(filtered_standings_rows, headers=headers, tablefmt="pretty"))
+                
+            except (IndexError, KeyError) as e:
+                logger.error(f"Error processing filtered standings: {e}")
+                # Fall back to standard standings display
+                click.echo(f"Error processing {filter} standings. Displaying standard standings instead.")
+                _display_standard_standings(standings_list)
+        else:
+            # Display standard standings
+            _display_standard_standings(standings_list)
         
         # Display current date and time info
         current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         click.echo(f"\n{Fore.BLUE}Standings as of: {current_time}{Style.RESET_ALL}")
+        if filter != "all":
+            click.echo(f"{Fore.YELLOW}Note: Standings are based on {filter} matches only.{Style.RESET_ALL}")
             
     except APIError as e:
         click.echo(f"API Error: {e.message}", err=True)
@@ -215,3 +244,96 @@ def _format_position(position: int) -> str:
     else:
         # Regular positions - normal text
         return str(position)
+
+
+def _display_standard_standings(standings_list: List[TeamStanding]) -> None:
+    """Display standard standings table."""
+    headers = ["Pos", "Team", "P", "W", "D", "L", "GF", "GA", "GD", "Pts"]
+    table_data = []
+    
+    for standing in standings_list:
+        # Calculate goal difference
+        gd = standing.goal_difference
+        gd_str = f"{gd:+d}" if gd != 0 else "0"
+        
+        # Add row to table
+        row = [
+            # Position with color
+            _format_position(standing.rank),
+            standing.team.name,
+            standing.played,
+            standing.win,
+            standing.draw,
+            standing.lose,
+            standing.goals_for,
+            standing.goals_against,
+            gd_str,
+            f"{Fore.CYAN}{Style.BRIGHT}{standing.points}{Style.RESET_ALL}"
+        ]
+        
+        table_data.append(row)
+    
+    # Display the table
+    click.echo(tabulate(table_data, headers=headers, tablefmt="pretty"))
+
+
+def _process_filtered_standings(standings_array: List[Dict[str, Any]], filter_type: str) -> List[List[Any]]:
+    """
+    Process standings array and return rows for display, filtered by home or away.
+    
+    Args:
+        standings_array: List of standings data dictionaries from the API
+        filter_type: Either "home" or "away"
+        
+    Returns:
+        List of rows ready for tabulate display
+    """
+    if not standings_array:
+        return []
+    
+    # Process standings based on filter type
+    table_rows = []
+    
+    # Sort the standings by home/away points
+    sorted_standings = sorted(
+        standings_array, 
+        key=lambda x: x.get(filter_type, {}).get("points", 0), 
+        reverse=True
+    )
+    
+    for i, standing_data in enumerate(sorted_standings):
+        # Get team data
+        team_data = standing_data.get("team", {})
+        
+        # Get filtered statistics
+        filtered_stats = standing_data.get(filter_type, {})
+        
+        if not filtered_stats:
+            continue
+        
+        # Get goals data
+        goals_data = filtered_stats.get("goals", {})
+        
+        # Calculate goal difference
+        goals_for = goals_data.get("for", 0)
+        goals_against = goals_data.get("against", 0)
+        goal_diff = goals_for - goals_against
+        gd_str = f"{goal_diff:+d}" if goal_diff != 0 else "0"
+        
+        # Format row
+        row = [
+            _format_position(i + 1),  # New position based on sort order
+            team_data.get("name", "Unknown"),
+            filtered_stats.get("played", 0),
+            filtered_stats.get("win", 0),
+            filtered_stats.get("draw", 0),
+            filtered_stats.get("lose", 0),
+            goals_for,
+            goals_against,
+            gd_str,
+            f"{Fore.CYAN}{Style.BRIGHT}{filtered_stats.get('points', 0)}{Style.RESET_ALL}"
+        ]
+        
+        table_rows.append(row)
+    
+    return table_rows
