@@ -9,7 +9,17 @@ import sys
 import os
 
 from app.utils.error_handlers import setup_error_handling
-from app.cli.commands import matches, live, fixture_statistics, fixture_lineup, team_squad, team_history, team_stats
+from app.cli.commands import (
+    matches, 
+    live, 
+    fixture_statistics, 
+    fixture_lineup, 
+    team_squad, 
+    team_history, 
+    team_stats
+)
+# Import our new standings command
+from app.cli.commands.standings_cmd import standings
 
 # Set up logging
 logging.basicConfig(
@@ -58,6 +68,8 @@ cli.add_command(fixture_lineup, name="lineup")
 cli.add_command(team_squad, name="squad")
 cli.add_command(team_history, name="history")
 cli.add_command(team_stats, name="team-stats")
+# Add our new standings command
+cli.add_command(standings, name="standings")
 
 
 if __name__ == '__main__':

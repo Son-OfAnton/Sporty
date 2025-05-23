@@ -9,6 +9,7 @@ from app.cli.commands.lineup_cmd import fixture_lineup
 from app.cli.commands.squad_cmd import team_squad
 from app.cli.commands.team_history_cmd import team_history
 from app.cli.commands.team_stats_cmd import team_stats
+from app.cli.commands.standings_cmd import standings
 
 # Export all command groups
 __all__ = [
@@ -18,5 +19,6 @@ __all__ = [
     'fixture_lineup', 
     'team_squad',
     'team_history',
-    'team_stats'
+    'team_stats',
+    'standings'
 ]
