@@ -59,7 +59,7 @@ class FootballService:
         # If no season is specified, use the current season
         if season is None:
             season = self.get_current_season()
-            
+
         response = self.client.get_teams(league=league_id, season=season)
         teams_data = parse_response(response, error_handler=handle_api_error)
 
@@ -135,42 +135,44 @@ class FootballService:
         # If no season is specified, use the current season
         if season is None:
             season = self.get_current_season()
-            
+
         response = self.client.get_players(team_id=team_id, season=season)
         players_data = parse_response(response, error_handler=handle_api_error)
 
         # Debug log to see the structure
-        logger.debug(f"Players data structure: {players_data[:1] if players_data else []}")
+        logger.debug(
+            f"Players data structure: {players_data[:1] if players_data else []}")
 
         player_list = []
         for item in players_data:
             # Extract player info from the response
             player_info = item.get("player", {})
-            
+
             if not player_info:
                 # Fallback to direct data if not nested
                 logger.warning(f"Unexpected player data format: {item}")
                 player_list.append(Player.from_api(item))
                 continue
-                
+
             # The statistics field may contain position information
             statistics = item.get("statistics", [])
             position = player_info.get("position")
-            
+
             # If position is not in player_info, try to get it from statistics
             if not position and statistics:
                 first_stat = statistics[0] if statistics else {}
                 games = first_stat.get("games", {})
                 position = games.get("position")
-            
+
             # Create a modified player info with the position
             modified_player_info = player_info.copy()
             if position:
                 modified_player_info["position"] = position
-                
+
             # Add the player to our list
-            player_list.append(Player.from_api({"player": modified_player_info}))
-                
+            player_list.append(Player.from_api(
+                {"player": modified_player_info}))
+
         return player_list
 
     def get_standings(self, league_id: int, season: int) -> List[TeamStanding]:
@@ -437,74 +439,74 @@ class FootballService:
     ) -> List[FixtureEvent]:
         """
         Get event details (goals, cards, substitutions) for a specific fixture.
-        
+
         Args:
             fixture_id: ID of the fixture
-            
+
         Returns:
             List of FixtureEvent objects
         """
         response = self.client.get_fixture_events(fixture_id=fixture_id)
         events_data = parse_response(response, error_handler=handle_api_error)
-        
+
         return [FixtureEvent.from_api(item) for item in events_data]
-        
+
     def get_fixture_statistics(
         self,
         fixture_id: int
     ) -> Dict[int, FixtureStatistics]:
         """
         Get detailed statistics for a specific fixture.
-        
+
         Args:
             fixture_id: ID of the fixture
-            
+
         Returns:
             Dict of FixtureStatistics objects, keyed by team ID
         """
         response = self.client.get_fixture_statistics(fixture_id=fixture_id)
         stats_data = parse_response(response, error_handler=handle_api_error)
-        
+
         result: Dict[int, FixtureStatistics] = {}
         for item in stats_data:
             stats = FixtureStatistics.from_api(item)
             result[stats.team_id] = stats
-            
+
         return result
-        
+
     def get_fixture_lineups(
         self,
         fixture_id: int
     ) -> Dict[int, TeamLineup]:
         """
         Get lineups for a specific fixture.
-        
+
         Args:
             fixture_id: ID of the fixture
-            
+
         Returns:
             Dict of TeamLineup objects, keyed by team ID
         """
         response = self.client.get_fixture_lineups(fixture_id=fixture_id)
         lineups_data = parse_response(response, error_handler=handle_api_error)
-        
+
         result: Dict[int, TeamLineup] = {}
         for item in lineups_data:
             lineup = TeamLineup.from_api(item)
             result[lineup.team_id] = lineup
-            
+
         return result
-        
+
     def get_match_statistics(
         self,
         fixture_id: int
     ) -> MatchStatistics:
         """
         Get comprehensive statistics for a match.
-        
+
         Args:
             fixture_id: ID of the fixture
-            
+
         Returns:
             MatchStatistics object containing events, team statistics, and lineups
         """
@@ -513,25 +515,25 @@ class FootballService:
         except Exception as e:
             logger.warning(f"Failed to get fixture events: {e}")
             events = []
-            
+
         try:
             team_statistics = self.get_fixture_statistics(fixture_id)
         except Exception as e:
             logger.warning(f"Failed to get fixture statistics: {e}")
             team_statistics = {}
-            
+
         try:
             lineups = self.get_fixture_lineups(fixture_id)
         except Exception as e:
             logger.warning(f"Failed to get fixture lineups: {e}")
             lineups = {}
-            
+
         return MatchStatistics(
             events=events,
             team_statistics=team_statistics,
             lineups=lineups
         )
-    
+
     def get_team_matches_by_date_range(
         self,
         team_id: int,
@@ -542,14 +544,14 @@ class FootballService:
     ) -> List[Fixture]:
         """
         Get team matches for a specific date range.
-        
+
         Args:
             team_id: Team ID
             from_date: Start date (YYYY-MM-DD format)
             to_date: End date (YYYY-MM-DD format)
             timezone: Timezone for match times
             status: Filter by match status (defaults to all)
-            
+
         Returns:
             List of Fixture objects for the team in the date range
         """
@@ -560,13 +562,15 @@ class FootballService:
             timezone=timezone,
             status=status
         )
-        
-        fixtures_data = parse_response(response, error_handler=handle_api_error)
+
+        fixtures_data = parse_response(
+            response, error_handler=handle_api_error)
         fixtures = [Fixture.from_api(item) for item in fixtures_data]
-        
-        logger.info(f"Found {len(fixtures)} matches for team {team_id} from {from_date} to {to_date}")
+
+        logger.info(
+            f"Found {len(fixtures)} matches for team {team_id} from {from_date} to {to_date}")
         return fixtures
-        
+
     def get_team_season_matches(
         self,
         team_id: int,
@@ -576,33 +580,35 @@ class FootballService:
     ) -> List[Fixture]:
         """
         Get all team matches for a specific season.
-        
+
         Args:
             team_id: Team ID
             season: Season year (defaults to current season)
             timezone: Timezone for match times
             status: Filter by match status (defaults to all)
-            
+
         Returns:
             List of Fixture objects for the team in the season
         """
         # If no season is specified, use the current season
         if season is None:
             season = self.get_current_season()
-            
+
         response = self.client.get_fixtures(
             team_id=team_id,
             season=season,
             timezone=timezone,
             status=status
         )
-        
-        fixtures_data = parse_response(response, error_handler=handle_api_error)
+
+        fixtures_data = parse_response(
+            response, error_handler=handle_api_error)
         fixtures = [Fixture.from_api(item) for item in fixtures_data]
-        
-        logger.info(f"Found {len(fixtures)} matches for team {team_id} in season {season}")
+
+        logger.info(
+            f"Found {len(fixtures)} matches for team {team_id} in season {season}")
         return fixtures
-    
+
     def get_team_statistics(
         self,
         team_id: int,
@@ -611,44 +617,68 @@ class FootballService:
     ) -> Optional[TeamStatistics]:
         """
         Get comprehensive statistics for a team in a specific season.
-        
+
         Args:
             team_id: Team ID
             season: Season year (defaults to current season)
             league_id: League ID (if None, get overall statistics across all competitions)
-            
+
         Returns:
             TeamStatistics object with comprehensive team statistics or None if not found
         """
         # If no season is specified, use the current season
         if season is None:
             season = self.get_current_season()
-            
+
         # Prepare parameters
         params = {
             "team": team_id,
             "season": season
         }
-        
+
         if league_id:
             params["league"] = league_id
-            
+
         # Make API request
         response = self.client.get_team_statistics(**params)
-        
+
         # Parse response
         stats_data = parse_response(response, error_handler=handle_api_error)
-        
+
         # If no data returned, return None
         if not stats_data:
             return None
-            
+
         # API returns statistics as a single object, not a list
         if isinstance(stats_data, dict):
             return TeamStatistics.from_api(stats_data)
-            
+
         # If it's a list (should not happen), take the first item
         if stats_data and isinstance(stats_data, list):
             return TeamStatistics.from_api(stats_data[0])
-            
+
         return None
+
+    def get_top_scorers(self, league_id: int, season: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Get top goal scorers for a specific league and season.
+
+        Args:
+            league_id: League ID
+            season: Season year (defaults to current season)
+
+        Returns:
+            List of player statistics with goal scoring information
+        """
+        # If no season is specified, use the current season
+        if season is None:
+            season = self.get_current_season()
+
+        response = self.client.get_top_scorers(
+            league_id=league_id, season=season)
+        top_scorers_data = parse_response(
+            response, error_handler=handle_api_error)
+
+        # Process the top scorers data
+        # The API returns player data with statistics
+        return top_scorers_data

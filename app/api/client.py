@@ -347,3 +347,25 @@ class FootballAPIClient:
             params["league"] = league
 
         return self._make_request("teams/statistics", params)
+
+    def get_top_scorers(
+        self,
+        league_id: int,
+        season: int
+    ) -> Dict[str, Any]:
+        """
+        Get top scorers for a specific league and season.
+
+        Args:
+            league_id: League ID
+            season: Season year
+
+        Returns:
+            Dict containing top scorers information
+        """
+        params = {
+            "league": league_id,
+            "season": season
+        }
+
+        return self._make_request("players/topscorers", params)

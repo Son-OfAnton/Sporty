@@ -16,10 +16,11 @@ from app.cli.commands import (
     fixture_lineup, 
     team_squad, 
     team_history, 
-    team_stats
+    team_stats,
 )
 # Import our new standings command
 from app.cli.commands.standings_cmd import standings
+from app.cli.commands.top_performer_cmd import top_performer
 
 # Set up logging
 logging.basicConfig(
@@ -68,8 +69,8 @@ cli.add_command(fixture_lineup, name="lineup")
 cli.add_command(team_squad, name="squad")
 cli.add_command(team_history, name="history")
 cli.add_command(team_stats, name="team-stats")
-# Add our new standings command
 cli.add_command(standings, name="standings")
+cli.add_command(top_performer, name="top-performer")
 
 
 if __name__ == '__main__':
