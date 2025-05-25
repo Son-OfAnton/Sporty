@@ -683,7 +683,6 @@ class FootballService:
         # The API returns player data with statistics
         return top_scorers_data
 
-
     def get_top_yellow_cards(self, league_id: int, season: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Get players with most yellow cards for a specific league and season.
@@ -698,13 +697,15 @@ class FootballService:
         # If no season is specified, use the current season
         if season is None:
             season = self.get_current_season()
-            
-        response = self.client.get_top_yellow_cards(league_id=league_id, season=season)
-        top_yellow_cards_data = parse_response(response, error_handler=handle_api_error)
-        
+
+        response = self.client.get_top_yellow_cards(
+            league_id=league_id, season=season)
+        top_yellow_cards_data = parse_response(
+            response, error_handler=handle_api_error)
+
         # Process the top yellow cards data
         return top_yellow_cards_data
-        
+
     def get_top_red_cards(self, league_id: int, season: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Get players with most red cards for a specific league and season.
@@ -719,13 +720,15 @@ class FootballService:
         # If no season is specified, use the current season
         if season is None:
             season = self.get_current_season()
-            
-        response = self.client.get_top_red_cards(league_id=league_id, season=season)
-        top_red_cards_data = parse_response(response, error_handler=handle_api_error)
-        
+
+        response = self.client.get_top_red_cards(
+            league_id=league_id, season=season)
+        top_red_cards_data = parse_response(
+            response, error_handler=handle_api_error)
+
         # Process the top red cards data
         return top_red_cards_data
-        
+
     def get_top_cards(self, league_id: int, season: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Get players with most cards (both yellow and red) for a specific league and season.
@@ -740,52 +743,242 @@ class FootballService:
         # If no season is specified, use the current season
         if season is None:
             season = self.get_current_season()
-            
+
         # Get both yellow and red cards data
-        yellow_cards_data = self.get_top_yellow_cards(league_id=league_id, season=season)
-        red_cards_data = self.get_top_red_cards(league_id=league_id, season=season)
-        
+        yellow_cards_data = self.get_top_yellow_cards(
+            league_id=league_id, season=season)
+        red_cards_data = self.get_top_red_cards(
+            league_id=league_id, season=season)
+
         # Combine both datasets
         # Use a dictionary to track players we've seen to avoid duplicates
         players_map = {}
-        
+
         # Process yellow cards first
         for player_data in yellow_cards_data:
             player_id = player_data.get("player", {}).get("id")
             if player_id:
                 players_map[player_id] = player_data
-                
+
         # Then add or update with red cards data
         for player_data in red_cards_data:
             player_id = player_data.get("player", {}).get("id")
             if not player_id:
                 continue
-                
+
             if player_id in players_map:
                 # Player already exists from yellow cards data
                 # We need to combine the statistics
-                existing_stats = players_map[player_id].get("statistics", [{}])[0] if players_map[player_id].get("statistics") else {}
-                new_stats = player_data.get("statistics", [{}])[0] if player_data.get("statistics") else {}
-                
+                existing_stats = players_map[player_id].get(
+                    "statistics", [{}])[0] if players_map[player_id].get("statistics") else {}
+                new_stats = player_data.get("statistics", [{}])[
+                    0] if player_data.get("statistics") else {}
+
                 # Make sure we have cards data in both
                 existing_cards = existing_stats.get("cards", {})
                 new_cards = new_stats.get("cards", {})
-                
+
                 # Update the existing player's data to include red cards
                 # Since this was from yellow cards originally, it might not have red cards info
                 if "red" not in existing_cards and "red" in new_cards:
                     existing_cards["red"] = new_cards["red"]
-                    
+
                 # Update the statistics in the player data
                 if players_map[player_id].get("statistics") and len(players_map[player_id]["statistics"]) > 0:
                     players_map[player_id]["statistics"][0]["cards"] = existing_cards
             else:
                 # Player isn't in our map yet, add them
                 players_map[player_id] = player_data
-                
+
         # Convert back to a list
         combined_cards_data = list(players_map.values())
-        
-        return combined_cards_data
-    
 
+        return combined_cards_data
+
+    def get_most_appearances(self, league_id: int, season: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Get players with most match appearances for a specific league and season.
+
+        Args:
+            league_id: League ID
+            season: Season year (defaults to current season)
+
+        Returns:
+            List of player statistics with appearance information, sorted by most appearances
+        """
+        # If no season is specified, use the current season
+        if season is None:
+            season = self.get_current_season()
+
+        # Since API doesn't have a specific endpoint for top appearances,
+        # we'll fetch all players and sort/filter them manually
+        all_players = []
+        current_page = 1
+        max_pages = 5  # Limit to reasonable number of pages to avoid excessive API calls
+
+        # Fetch players data from multiple pages if available
+        while current_page <= max_pages:
+            try:
+                logger.info(
+                    f"Fetching players data for league {league_id}, season {season}, page {current_page}")
+                response = self.client.get_league_players(
+                    league_id=league_id,
+                    season=season,
+                    page=current_page
+                )
+
+                # Parse the response
+                players_data = parse_response(
+                    response, error_handler=handle_api_error)
+
+                if not players_data:
+                    # No more data available
+                    break
+
+                # Add to our collection
+                all_players.extend(players_data)
+
+                # Get pagination info if available
+                pagination = response.get("paging", {})
+                total_pages = pagination.get("total", 1)
+
+                if current_page >= total_pages:
+                    # No more pages available
+                    break
+
+                # Move to next page
+                current_page += 1
+
+            except APIError as e:
+                logger.error(f"Error fetching players data: {e}")
+                break
+
+        # Now sort the players by number of appearances in descending order
+        # Filter out players missing statistics or games and compute appearance counts
+        valid_players = []
+        for player in all_players:
+            stats_list = player.get("statistics")
+            if not isinstance(stats_list, list) or not stats_list:
+                continue
+            games = stats_list[0].get("games", {}) or {}
+            # Handle both correct and misspelled keys
+            appearances = games.get("appearances", games.get("appearences"))
+            if not isinstance(appearances, int):
+                continue
+            # Store temporary count for sorting
+            player['_appearances_count'] = appearances
+            valid_players.append(player)
+
+        # Sort players by appearances descending
+        sorted_players = sorted(
+            valid_players,
+            key=lambda x: x['_appearances_count'],
+            reverse=True
+        )
+
+        # Remove temporary key before returning
+        for player in sorted_players:
+            player.pop('_appearances_count', None)
+
+        return sorted_players
+
+    def get_most_passes(self, league_id: int, season: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Get players who completed the most passes for a specific league and season.
+
+        Args:
+            league_id: League ID
+            season: Season year (defaults to current season)
+
+        Returns:
+            List of player statistics with passing information, sorted by most passes completed
+        """
+        # If no season is specified, use the current season
+        if season is None:
+            season = self.get_current_season()
+
+        # Since API doesn't have a specific endpoint for top passers,
+        # we'll fetch all players and sort/filter them manually
+        all_players = []
+        current_page = 1
+        max_pages = 5  # Limit to reasonable number of pages to avoid excessive API calls
+
+        # Fetch players data from multiple pages if available
+        while current_page <= max_pages:
+            try:
+                logger.info(
+                    f"Fetching players data for league {league_id}, season {season}, page {current_page}")
+                response = self.client.get_top_passes(
+                    league_id=league_id,
+                    season=season
+                )
+
+                # Parse the response
+                players_data = parse_response(
+                    response, error_handler=handle_api_error)
+
+                if not players_data:
+                    # No more data available
+                    break
+
+                # Add to our collection
+                all_players.extend(players_data)
+
+                # Get pagination info if available
+                pagination = response.get("paging", {})
+                total_pages = pagination.get("total", 1)
+
+                if current_page >= total_pages or "page" not in response.get("parameters", {}):
+                    # No more pages available or no pagination information
+                    break
+
+                # Move to next page
+                current_page += 1
+
+            except APIError as e:
+                logger.error(f"Error fetching players passing data: {e}")
+                break
+
+        # Filter out players with invalid or missing statistics
+        valid_players = []
+        for player in all_players:
+            try:
+                # Check if player has valid statistics
+                stats = player.get("statistics", [])
+                if not stats or not isinstance(stats, list):
+                    continue
+
+                # Get passing data
+                passes = stats[0].get("passes", {})
+                if not passes or not isinstance(passes, dict):
+                    continue
+
+                # Check if we have valid total passes data
+                total_passes = passes.get("total")
+
+                # Skip players with None or invalid total passes
+                if total_passes is None or not isinstance(total_passes, (int, float)):
+                    continue
+
+                # This player has valid data, keep it
+                valid_players.append(player)
+            except Exception as e:
+                # Skip problematic players
+                logger.warning(f"Skipping player with invalid data: {str(e)}")
+                continue
+
+        # Now sort the valid players by number of total passes in descending order
+        sorted_players = sorted(
+            valid_players,
+            key=lambda x: (
+                # Get passes from statistics
+                x.get("statistics", [{}])[0].get("passes", {}).get("total", 0)
+            ),
+            reverse=True  # Descending order
+        )
+
+        # Log the result
+        logger.info(
+            f"Found {len(sorted_players)} players with valid passing data out of {len(all_players)} total players")
+
+        return sorted_players
