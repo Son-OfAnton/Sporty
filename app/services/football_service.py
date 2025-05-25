@@ -682,3 +682,28 @@ class FootballService:
         # Process the top scorers data
         # The API returns player data with statistics
         return top_scorers_data
+
+    def get_top_cards(self, league_id: int, season: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Get players with most cards (yellow/red) for a specific league and season.
+
+        Args:
+            league_id: League ID
+            season: Season year (defaults to current season)
+
+        Returns:
+            List of player statistics with card information
+        """
+        # If no season is specified, use the current season
+        if season is None:
+            season = self.get_current_season()
+
+        response = self.client.get_top_cards(
+            league_id=league_id, season=season)
+        top_cards_data = parse_response(
+            response, error_handler=handle_api_error)
+
+        # Process the top cards data
+        return top_cards_data
+    
+    
