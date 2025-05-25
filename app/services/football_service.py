@@ -683,27 +683,109 @@ class FootballService:
         # The API returns player data with statistics
         return top_scorers_data
 
-    def get_top_cards(self, league_id: int, season: Optional[int] = None) -> List[Dict[str, Any]]:
+
+    def get_top_yellow_cards(self, league_id: int, season: Optional[int] = None) -> List[Dict[str, Any]]:
         """
-        Get players with most cards (yellow/red) for a specific league and season.
+        Get players with most yellow cards for a specific league and season.
 
         Args:
             league_id: League ID
             season: Season year (defaults to current season)
 
         Returns:
-            List of player statistics with card information
+            List of player statistics with yellow card information
         """
         # If no season is specified, use the current season
         if season is None:
             season = self.get_current_season()
+            
+        response = self.client.get_top_yellow_cards(league_id=league_id, season=season)
+        top_yellow_cards_data = parse_response(response, error_handler=handle_api_error)
+        
+        # Process the top yellow cards data
+        return top_yellow_cards_data
+        
+    def get_top_red_cards(self, league_id: int, season: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Get players with most red cards for a specific league and season.
 
-        response = self.client.get_top_cards(
-            league_id=league_id, season=season)
-        top_cards_data = parse_response(
-            response, error_handler=handle_api_error)
+        Args:
+            league_id: League ID
+            season: Season year (defaults to current season)
 
-        # Process the top cards data
-        return top_cards_data
+        Returns:
+            List of player statistics with red card information
+        """
+        # If no season is specified, use the current season
+        if season is None:
+            season = self.get_current_season()
+            
+        response = self.client.get_top_red_cards(league_id=league_id, season=season)
+        top_red_cards_data = parse_response(response, error_handler=handle_api_error)
+        
+        # Process the top red cards data
+        return top_red_cards_data
+        
+    def get_top_cards(self, league_id: int, season: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Get players with most cards (both yellow and red) for a specific league and season.
+
+        Args:
+            league_id: League ID
+            season: Season year (defaults to current season)
+
+        Returns:
+            List of player statistics with combined card information
+        """
+        # If no season is specified, use the current season
+        if season is None:
+            season = self.get_current_season()
+            
+        # Get both yellow and red cards data
+        yellow_cards_data = self.get_top_yellow_cards(league_id=league_id, season=season)
+        red_cards_data = self.get_top_red_cards(league_id=league_id, season=season)
+        
+        # Combine both datasets
+        # Use a dictionary to track players we've seen to avoid duplicates
+        players_map = {}
+        
+        # Process yellow cards first
+        for player_data in yellow_cards_data:
+            player_id = player_data.get("player", {}).get("id")
+            if player_id:
+                players_map[player_id] = player_data
+                
+        # Then add or update with red cards data
+        for player_data in red_cards_data:
+            player_id = player_data.get("player", {}).get("id")
+            if not player_id:
+                continue
+                
+            if player_id in players_map:
+                # Player already exists from yellow cards data
+                # We need to combine the statistics
+                existing_stats = players_map[player_id].get("statistics", [{}])[0] if players_map[player_id].get("statistics") else {}
+                new_stats = player_data.get("statistics", [{}])[0] if player_data.get("statistics") else {}
+                
+                # Make sure we have cards data in both
+                existing_cards = existing_stats.get("cards", {})
+                new_cards = new_stats.get("cards", {})
+                
+                # Update the existing player's data to include red cards
+                # Since this was from yellow cards originally, it might not have red cards info
+                if "red" not in existing_cards and "red" in new_cards:
+                    existing_cards["red"] = new_cards["red"]
+                    
+                # Update the statistics in the player data
+                if players_map[player_id].get("statistics") and len(players_map[player_id]["statistics"]) > 0:
+                    players_map[player_id]["statistics"][0]["cards"] = existing_cards
+            else:
+                # Player isn't in our map yet, add them
+                players_map[player_id] = player_data
+                
+        # Convert back to a list
+        combined_cards_data = list(players_map.values())
+        
+        return combined_cards_data
     
-    
+

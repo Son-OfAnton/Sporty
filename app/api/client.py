@@ -370,24 +370,47 @@ class FootballAPIClient:
 
         return self._make_request("players/topscorers", params)
 
-    def get_top_cards(
+
+    def get_top_yellow_cards(
         self,
         league_id: int,
         season: int
     ) -> Dict[str, Any]:
         """
-        Get players with most cards for a specific league and season.
+        Get players with most yellow cards for a specific league and season.
 
         Args:
             league_id: League ID
             season: Season year
 
         Returns:
-            Dict containing players with card statistics
+            Dict containing players with yellow card statistics
         """
         params = {
             "league": league_id,
             "season": season
         }
 
-        return self._make_request("players/topcards", params)
+        return self._make_request("players/topyellowcards", params)
+
+    def get_top_red_cards(
+        self,
+        league_id: int,
+        season: int
+    ) -> Dict[str, Any]:
+        """
+        Get players with most red cards for a specific league and season.
+
+        Args:
+            league_id: League ID
+            season: Season year
+
+        Returns:
+            Dict containing players with red card statistics
+        """
+        params = {
+            "league": league_id,
+            "season": season
+        }
+
+        return self._make_request("players/topredcards", params)
