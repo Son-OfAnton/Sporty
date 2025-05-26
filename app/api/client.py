@@ -347,3 +347,140 @@ class FootballAPIClient:
             params["league"] = league
 
         return self._make_request("teams/statistics", params)
+
+    def get_top_scorers(
+        self,
+        league_id: int,
+        season: int
+    ) -> Dict[str, Any]:
+        """
+        Get top scorers for a specific league and season.
+
+        Args:
+            league_id: League ID
+            season: Season year
+
+        Returns:
+            Dict containing top scorers information
+        """
+        params = {
+            "league": league_id,
+            "season": season
+        }
+
+        return self._make_request("players/topscorers", params)
+
+    def get_top_yellow_cards(
+        self,
+        league_id: int,
+        season: int
+    ) -> Dict[str, Any]:
+        """
+        Get players with most yellow cards for a specific league and season.
+
+        Args:
+            league_id: League ID
+            season: Season year
+
+        Returns:
+            Dict containing players with yellow card statistics
+        """
+        params = {
+            "league": league_id,
+            "season": season
+        }
+
+        return self._make_request("players/topyellowcards", params)
+
+    def get_top_red_cards(
+        self,
+        league_id: int,
+        season: int
+    ) -> Dict[str, Any]:
+        """
+        Get players with most red cards for a specific league and season.
+
+        Args:
+            league_id: League ID
+            season: Season year
+
+        Returns:
+            Dict containing players with red card statistics
+        """
+        params = {
+            "league": league_id,
+            "season": season
+        }
+
+        return self._make_request("players/topredcards", params)
+
+    def get_top_appearances(
+        self,
+        league_id: int,
+        season: int
+    ) -> Dict[str, Any]:
+        """
+        Get players with most appearances for a specific league and season.
+
+        Args:
+            league_id: League ID
+            season: Season year
+
+        Returns:
+            Dict containing players with appearance statistics
+        """
+        params = {
+            "league": league_id,
+            "season": season
+        }
+
+        return self._make_request("players/topappearances", params)
+
+    def get_league_players(
+        self,
+        league_id: int,
+        season: int,
+        page: int = 1
+    ) -> Dict[str, Any]:
+        """
+        Get players for a specific league and season.
+
+        Args:
+            league_id: League ID
+            season: Season year
+            page: Page number for pagination (each page returns ~20 players)
+
+        Returns:
+            Dict containing players in the league with their statistics
+        """
+        params = {
+            "league": league_id,
+            "season": season,
+            "page": page
+        }
+
+        return self._make_request("players", params)
+
+    def get_top_passes(
+        self,
+        league_id: int,
+        season: int
+    ) -> Dict[str, Any]:
+        """
+        Get players with most passes for a specific league and season.
+
+        Args:
+            league_id: League ID
+            season: Season year
+
+        Returns:
+            Dict containing players with passing statistics
+        """
+        params = {
+            "league": league_id,
+            "season": season
+        }
+
+        # Use the general players endpoint since there's no specific endpoint for top passers
+        # We'll need to filter and sort the data in the service layer
+        return self._make_request("players", params)
