@@ -59,9 +59,94 @@ sporty live scores --format detailed
 ```
 
 This feature shows real-time match updates including:
+
 - Current score
 - Match status (first half, second half, etc.)
 - Minutes played
 - Team information
 
 Data is fetched directly from the API-Football service.
+
+## Commands
+
+Below is the full list of commands supported by Sporty CLI:
+
+### matches scores
+
+```bash
+sporty matches scores [OPTIONS]
+```
+
+### live scores
+
+```bash
+sporty live scores [OPTIONS]
+```
+
+Alias for `matches scores --live`.
+
+### stats
+
+```bash
+sporty stats FIXTURE_ID
+```
+
+### lineup
+
+```bash
+sporty lineup FIXTURE_ID
+```
+
+### squad
+
+```bash
+sporty squad TEAM_ID [OPTIONS]
+```
+
+### history
+
+```bash
+sporty history TEAM_ID [OPTIONS]
+```
+
+### team-stats
+
+```bash
+sporty team-stats TEAM_ID [OPTIONS]
+```
+
+### standings league
+
+```bash
+sporty standings league [OPTIONS]
+```
+
+### standings list-leagues
+
+```bash
+sporty standings list-leagues [OPTIONS]
+```
+
+### top-performer goals
+
+```bash
+sporty top-performer goals [OPTIONS]
+```
+
+### top-performer assists
+
+```bash
+sporty top-performer assists [OPTIONS]
+```
+
+### top-performer cards
+
+```bash
+sporty top-performer cards [OPTIONS]
+```
+
+### top-performer appearances
+
+```bash
+sporty top-performer appearances [OPTIONS]
+```
